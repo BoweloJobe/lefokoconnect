@@ -1,0 +1,8 @@
+{
+  "name": "LefokoConnect",
+  "description": "A beautiful proudly African Setswana word connect puzzle game promoting Botswana language, heritage and proverbs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
