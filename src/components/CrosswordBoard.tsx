@@ -7,7 +7,13 @@ interface CrosswordBoardProps {
   foundWords: string[];
   revealedCells?: { [key: string]: string }; // Format: "row,col" => "K"
   accentColor?: string;
-  onSelectWordClue?: (clue: string, word: string) => void;
+  onSelectWordClue?: (clue: string, words: string[]) => void;
+}
+
+interface CrosswordCell {
+  letter: string;
+  isPeakOfWord: boolean;
+  wordRefs: string[];
 }
 
 export default function CrosswordBoard({
@@ -19,25 +25,31 @@ export default function CrosswordBoard({
   onSelectWordClue,
 }: CrosswordBoardProps) {
   // Construct the 2D crossword grid layout
-  const grid: ({ letter: string; isPeakOfWord: boolean; wordRef: string } | null)[][] = Array(gridSize)
+  const grid: (CrosswordCell | null)[][] = Array(gridSize)
     .fill(null)
     .map(() => Array(gridSize).fill(null));
 
   // Trace words onto the matrix grid
   gridWords.forEach((gw) => {
-    const isGuessed = foundWords.includes(gw.word.toUpperCase());
     for (let i = 0; i < gw.word.length; i++) {
       const letter = gw.word[i].toUpperCase();
       const r = gw.direction === "H" ? gw.r : gw.r + i;
       const c = gw.direction === "H" ? gw.c + i : gw.c;
 
       if (r >= 0 && r < gridSize && c >= 0 && c < gridSize) {
-        // Only set letter if empty or overlapping matches
-        grid[r][c] = {
-          letter,
-          isPeakOfWord: i === 0,
-          wordRef: gw.word,
-        };
+        const existing = grid[r][c];
+        if (existing) {
+          if (existing.letter === letter) {
+            existing.wordRefs = Array.from(new Set([...existing.wordRefs, gw.word]));
+            existing.isPeakOfWord = existing.isPeakOfWord || i === 0;
+          }
+        } else {
+          grid[r][c] = {
+            letter,
+            isPeakOfWord: i === 0,
+            wordRefs: [gw.word],
+          };
+        }
       }
     }
   });
@@ -68,7 +80,7 @@ export default function CrosswordBoard({
             }
 
             const cellKey = `${rIdx},${cIdx}`;
-            const isGuessed = foundWords.includes(cell.wordRef.toUpperCase());
+            const isGuessed = cell.wordRefs.some((wordRef) => foundWords.includes(wordRef.toUpperCase()));
             const isIndividualHintRevealed = !!revealedCells[cellKey];
             const displayLetter = isGuessed ? cell.letter : isIndividualHintRevealed ? revealedCells[cellKey] : "";
 
@@ -89,12 +101,18 @@ export default function CrosswordBoard({
                 key={`cell-${rIdx}-${cIdx}`}
                 id={`cell-${rIdx}-${cIdx}`}
                 onClick={() => {
-                  const matchingWord = gridWords.find((gw) => gw.word === cell.wordRef);
-                  if (matchingWord && onSelectWordClue && matchingWord.clue) {
-                    onSelectWordClue(matchingWord.clue, matchingWord.word);
+                  const matchingWords = gridWords.filter((gw) => cell.wordRefs.includes(gw.word));
+                  if (matchingWords.length === 0) return;
+
+                  const clueText = matchingWords
+                    .map((gw) => `${gw.word}: ${gw.clue || "No clue available."}`)
+                    .join(" \u2022 ");
+
+                  if (onSelectWordClue) {
+                    onSelectWordClue(clueText, matchingWords.map((gw) => gw.word));
                   }
                 }}
-                disabled={!gridWords.find((gw) => gw.word === cell.wordRef)?.clue}
+                disabled={!gridWords.some((gw) => cell.wordRefs.includes(gw.word) && gw.clue)}
                 className={`relative aspect-square w-full rounded-lg border-2 flex items-center justify-center transition-all duration-300 focus:outline-none hover:border-amber-400 hover:scale-105 active:scale-95 ${boxBg}`}
               >
                 {/* Visual grid cell content */}

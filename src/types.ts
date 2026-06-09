@@ -66,6 +66,7 @@ export interface UserStats {
   bonusBankSize: number;
   totalWordsSolved: number;
   achievements: Achievement[];
+  dailyCompletion: Record<string, boolean>;
 }
 
 export interface GameSessionState {
@@ -75,7 +76,7 @@ export interface GameSessionState {
   swipedLetters: string[]; // dynamic letters selected by swipe
   score: number;
   timeRemaining?: number; // for Timed Mode
-  isCompleted: boolean;
+  status: "playing" | "completed" | "failed";
 }
 
 // AI response formats

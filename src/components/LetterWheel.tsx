@@ -123,8 +123,10 @@ export default function LetterWheel({
       if (!selectedIndices.includes(collidedIdx)) {
         const lastIdx = selectedIndices[selectedIndices.length - 1];
         // Allow selection of adjacent/any letters as long as not duplicated immediately
-        setSelectedIndices((prev) => [...prev, collidedIdx]);
-        soundEngine.playLetterConnect(selectedIndices.length);
+        setSelectedIndices((prev) => {
+          soundEngine.playLetterConnect(prev.length);
+          return [...prev, collidedIdx];
+        });
       } else {
         // If it's the second-to-last item, support "rolling back" the swipe (highly tactile feature!)
         if (selectedIndices.length > 1 && selectedIndices[selectedIndices.length - 2] === collidedIdx) {
@@ -133,6 +135,29 @@ export default function LetterWheel({
         }
       }
     }
+  };
+
+  const handleTapNode = (index: number) => {
+    if (isSwiping) return;
+    setSelectedIndices((prev) => {
+      if (prev.includes(index)) {
+        if (prev.length > 1 && prev[prev.length - 2] === index) {
+          soundEngine.playLetterConnect(Math.max(0, prev.length - 2));
+          return prev.slice(0, -1);
+        }
+        return prev;
+      }
+      soundEngine.playLetterConnect(prev.length);
+      return [...prev, index];
+    });
+  };
+
+  const submitSelectedWord = () => {
+    if (selectedIndices.length === 0) return;
+    const swipedWord = selectedIndices.map((idx) => nodes[idx].letter).join("");
+    onWordComplete(swipedWord);
+    setSelectedIndices([]);
+    setDragPosition(null);
   };
 
   // Finalize word selection
@@ -169,18 +194,27 @@ export default function LetterWheel({
   return (
     <div className="flex flex-col items-center select-none" id="letter_wheel_container">
       {/* Dynamic Overlay Preview */}
-      <div className="h-12 flex items-center justify-center mb-6">
-        {swipedWordPreview && (
-          <div
-            className="px-6 py-2 rounded-full text-white font-mono font-bold text-2xl tracking-widest shadow-lg animate-bounce duration-150 border uppercase"
-            style={{
-              background: `radial-gradient(circle, ${accentColor} 0%, #1E293B 100%)`,
-              borderColor: accentColor,
-              boxShadow: `0 0 15px ${accentColor}80`,
-            }}
-          >
-            {swipedWordPreview}
-          </div>
+<div className="h-12 flex flex-col items-center justify-center mb-6 gap-2">
+          {swipedWordPreview && (
+            <>
+              <div
+                className="px-6 py-2 rounded-full text-white font-mono font-bold text-2xl tracking-widest shadow-lg animate-bounce duration-150 border uppercase"
+                style={{
+                  background: `radial-gradient(circle, ${accentColor} 0%, #1E293B 100%)`,
+                  borderColor: accentColor,
+                  boxShadow: `0 0 15px ${accentColor}80`,
+                }}
+              >
+                {swipedWordPreview}
+              </div>
+              <button
+                type="button"
+                onClick={submitSelectedWord}
+                className="px-4 py-1 rounded-full bg-white/90 border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition"
+              >
+                Submit
+              </button>
+            </>
         )}
       </div>
 
@@ -247,7 +281,7 @@ export default function LetterWheel({
                 key={`node-${index}`}
                 transform={`translate(${node.x}, ${node.y})`}
                 className="cursor-pointer group"
-                id={`letter-node-${node.letter}`}
+                id={`letter-node-${node.letter}-${index}`}
               >
                 {/* Visual Bead base backing bubble */}
                 <circle
@@ -258,6 +292,14 @@ export default function LetterWheel({
                   className="transition-colors duration-200 ease-out shadow-md"
                   style={{
                     boxShadow: isSelected ? `0 0 15px ${accentColor}` : "none",
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTapNode(index);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    handleTapNode(index);
                   }}
                 />
 

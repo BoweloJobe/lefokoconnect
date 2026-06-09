@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { soundEngine } from "./components/AudioSynthesizer";
 import { staticLevels, themeBackgrounds, setswanaDictionary } from "./data/dictionary";
+import { getDailyDateKey, pickDailyLevel } from "./domain/dailyLevelUtils";
 import { Level, UserStats, GameSessionState, Achievement } from "./types";
 import LetterWheel from "./components/LetterWheel";
 import CrosswordBoard from "./components/CrosswordBoard";
@@ -62,6 +63,7 @@ export default function App() {
     bonusBankSize: 0,
     totalWordsSolved: 0,
     achievements: defaultAchievements,
+    dailyCompletion: {},
   });
 
   const getActiveLevel = (): Level => {
@@ -70,10 +72,10 @@ export default function App() {
       const match = allLevels.find(l => l.levelNumber === userStats.classicLevelProgress);
       return match || allLevels[0];
     } else if (activeMode === "daily") {
-      // Return predefined level 8 as the "Daily Kalahari challenge"
-      return allLevels.find(l => l.levelNumber === 8) || allLevels[0];
+      const dailyKey = getDailyDateKey();
+      return pickDailyLevel(staticLevels, dailyKey);
     } else {
-      // Time Attack Mode uses Level 2 or 5
+      // Time Attack Mode uses a fixed timed level to keep the experience focused
       return allLevels.find(l => l.levelNumber === 6) || allLevels[1];
     }
   };
@@ -86,7 +88,7 @@ export default function App() {
     bonusWordsFound: [],
     swipedLetters: [],
     score: 0,
-    isCompleted: false,
+    status: "playing",
   });
   const level = session.currentLevel;
 
@@ -133,7 +135,7 @@ export default function App() {
       bonusWordsFound: [],
       swipedLetters: [],
       score: 0,
-      isCompleted: false,
+      status: "playing",
     });
     setRevealedCells({});
 
@@ -144,12 +146,16 @@ export default function App() {
     } else {
       setIsTimerActive(false);
     }
-  }, [userStats.classicLevelProgress, activeMode, allLevels]);
+  }, [selectedLevel, activeMode]);
 
   // Handle countdown constraints inside Time Attack Mode
   useEffect(() => {
+    if (session.status !== "playing") {
+      setIsTimerActive(false);
+    }
+
     let interval: NodeJS.Timeout | null = null;
-    if (isTimerActive && activeMode === "timed" && timeRemaining > 0) {
+    if (isTimerActive && activeMode === "timed" && timeRemaining > 0 && session.status === "playing") {
       interval = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
@@ -165,11 +171,11 @@ export default function App() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerActive, timeRemaining, activeMode]);
+  }, [isTimerActive, timeRemaining, activeMode, session.status]);
 
   const triggerConsolidationFailedModal = () => {
     triggerToast("⏰ Time is up! Try again to achieve a higher score in Time Attack.");
-    setSession((prev) => ({ ...prev, isCompleted: true }));
+    setSession((prev) => ({ ...prev, status: "failed" }));
   };
 
   // Sound Engine mute toggle handler
@@ -187,6 +193,15 @@ export default function App() {
     setTimeout(() => {
       setToastMessage((prev) => (prev === msg ? null : prev));
     }, 6500);
+  };
+
+  const guardActiveGameplay = () => {
+    if (session.status !== "playing") {
+      triggerToast("This action is disabled once the level is finished. Continue or retry to play again.");
+      soundEngine.playError();
+      return false;
+    }
+    return true;
   };
 
   const applyAchievementProgress = (
@@ -218,6 +233,8 @@ export default function App() {
   };
 
   const resolveMainWord = (targetWord: string, options: { hintCost?: number; source?: "swipe" | "word_hint" } = {}) => {
+    if (!guardActiveGameplay()) return;
+
     const uppercaseWord = targetWord.toUpperCase();
     if (session.foundWords.includes(uppercaseWord)) {
       triggerToast(`You already found the word: "${uppercaseWord}"!`);
@@ -228,6 +245,7 @@ export default function App() {
     const earnedXp = isLevelFinished ? 80 : 25;
     const earnedCoins = isLevelFinished ? 100 : 30;
     const hintCost = options.hintCost || 0;
+    const currentDailyKey = getDailyDateKey();
 
     soundEngine.playSuccessWord();
     if (isLevelFinished) {
@@ -238,16 +256,10 @@ export default function App() {
     setSession((prev) => ({
       ...prev,
       foundWords: updatedFound,
-      isCompleted: isLevelFinished,
+      status: isLevelFinished ? "completed" : "playing",
     }));
 
     updateUserStats((prev) => {
-      const finalProgress = isLevelFinished && activeMode === "classic"
-        ? prev.classicLevelProgress < allLevels.length
-          ? prev.classicLevelProgress + 1
-          : 1
-        : prev.classicLevelProgress;
-
       const { updatedAchievements, unlockedMessages } = applyAchievementProgress(prev.achievements, [
         { id: "first_solve", amount: 1 },
         ...(isLevelFinished ? [{ id: "five_levels", amount: 1 }] : []),
@@ -259,9 +271,12 @@ export default function App() {
         xp: prev.xp + earnedXp,
         coins: prev.coins + earnedCoins - hintCost,
         gems: prev.gems + (isLevelFinished ? 10 : 0),
-        classicLevelProgress: finalProgress,
+        classicLevelProgress: prev.classicLevelProgress,
         totalWordsSolved: prev.totalWordsSolved + 1,
         achievements: updatedAchievements,
+        dailyCompletion: activeMode === "daily" && isLevelFinished
+          ? { ...prev.dailyCompletion, [currentDailyKey]: true }
+          : prev.dailyCompletion,
       };
     });
 
@@ -278,6 +293,7 @@ export default function App() {
 
   // CORE EVALUATOR: Validate swiped words
   const handleWordSwipeComplete = (swipedWord: string) => {
+    if (!guardActiveGameplay()) return;
     const uppercaseSwipe = swipedWord.toUpperCase();
 
     // Prevent immediate processing of ultra-short inputs
@@ -308,7 +324,7 @@ export default function App() {
           bonusWordsFound: updatedBonus,
         }));
 
-        triggerToast(`ðŸ’¡ Brilliant! "${uppercaseSwipe}" is a bonus word! Logged into the Setswana Bank (+15 Coins).`);
+        triggerToast(`✨ Brilliant! "${uppercaseSwipe}" is a bonus word! Logged into the Setswana Bank (+15 Coins).`);
         updateUserStats((prev) => {
           const { updatedAchievements, unlockedMessages } = applyAchievementProgress(prev.achievements, [
             { id: "bonus_word", amount: 1 },
@@ -333,6 +349,7 @@ export default function App() {
 
   // HINT 1: Reveal single character coordinate box (50 coins)
   const triggerRevealLetterHint = () => {
+    if (!guardActiveGameplay()) return;
     if (userStats.coins < 50) {
       triggerToast("Need more Gold Coins! Solve levels or bonus words to purchase hints.");
       soundEngine.playError();
@@ -381,6 +398,7 @@ export default function App() {
 
   // HINT 2: Reveal entire remaining unsolved word slot (120 coins)
   const triggerRevealWordHint = () => {
+    if (!guardActiveGameplay()) return;
     if (userStats.coins < 120) {
       triggerToast("Insufficient Gold Coins! Word hints require 120 coins.");
       soundEngine.playError();
@@ -400,6 +418,7 @@ export default function App() {
 
   // HINT 3: Gemini smart explanatory hint
   const triggerSmartAIHint = async (wordToExplain: string) => {
+    if (!guardActiveGameplay()) return;
     triggerToast("Asking the smart Kgotla oracle for cultural knowledge... ⏳");
     try {
       const response = await fetch("/api/hint/explain", {
@@ -441,6 +460,7 @@ export default function App() {
 
   // Handle shuffling on-wheel letters randomly
   const handleShuffleLetters = () => {
+    if (!guardActiveGameplay()) return;
     setSession((prev) => ({
       ...prev,
       // Create a shallow copy to trigger reactivity inside LetterWheel letters list layout
@@ -685,7 +705,13 @@ export default function App() {
               foundWords={session.foundWords}
               revealedCells={revealedCells}
               accentColor="#C79A3B"
-              onSelectWordClue={(cl, wd) => triggerSmartAIHint(wd)}
+              onSelectWordClue={(clue, words) => {
+                if (words.length === 1) {
+                  triggerSmartAIHint(words[0]);
+                } else {
+                  triggerToast(`Crossword intersection clues: ${clue}`);
+                }
+              }}
             />
 
             {/* Quick Interactive Tooltip detailing clues of remaining lines */}
@@ -815,7 +841,7 @@ export default function App() {
       )}
 
       {/* LEVEL COMPLETED TRIGGER FLOATING REWARD MODAL OVERLAY */}
-      {session.isCompleted && (
+      {session.status === "completed" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xl animate-fadeIn" id="success_celebration_backdrop" role="dialog" aria-modal="true" aria-labelledby="level_complete_title">
           <div className="bg-gradient-to-br from-[#FFFDF9] to-[#F4E7D3] border-4 border-[#C79A3B] max-w-md w-full rounded-3xl p-6 text-center select-none shadow-2xl relative overflow-hidden flex flex-col items-center">
             
@@ -867,13 +893,97 @@ export default function App() {
 
             <button
               onClick={() => {
-                // If classic, session already handles progress. We reset session isCompleted state
-                setSession((prev) => ({ ...prev, isCompleted: false }));
+                const nextClassicProgress = activeMode === "classic"
+                  ? userStats.classicLevelProgress < allLevels.length
+                    ? userStats.classicLevelProgress + 1
+                    : 1
+                  : userStats.classicLevelProgress;
+
+                if (activeMode === "classic") {
+                  updateUserStats((prev) => ({
+                    ...prev,
+                    classicLevelProgress: nextClassicProgress,
+                  }));
+                }
+
+                const nextLevel = activeMode === "classic"
+                  ? allLevels.find((l) => l.levelNumber === nextClassicProgress) || selectedLevel
+                  : getActiveLevel();
+
+                setSession({
+                  currentLevel: nextLevel,
+                  foundWords: [],
+                  bonusWordsFound: [],
+                  swipedLetters: [],
+                  score: 0,
+                  status: "playing",
+                });
+                setRevealedCells({});
+                if (activeMode === "timed") {
+                  setTimeRemaining(45);
+                  setIsTimerActive(true);
+                }
                 triggerToast("Embarking on the next Setswana path of learning...");
               }}
               className="w-full py-3.5 bg-gradient-to-r from-[#C79A3B] to-[#7A5A3A] rounded-2xl text-white font-mono font-bold text-xs uppercase border border-yellow-600 hover:opacity-90 active:scale-95 transition-transform"
             >
-              Continue to Level {userStats.classicLevelProgress} ➔
+              Continue to Level {activeMode === "classic" ? (userStats.classicLevelProgress < allLevels.length ? userStats.classicLevelProgress + 1 : 1) : level.levelNumber} ➔
+            </button>
+          </div>
+        </div>
+      )}
+
+      {session.status === "failed" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xl animate-fadeIn" id="failure_backdrop" role="dialog" aria-modal="true" aria-labelledby="failure_title">
+          <div className="bg-white border-4 border-red-300 max-w-md w-full rounded-3xl p-6 text-center select-none shadow-2xl relative overflow-hidden flex flex-col items-center">
+            <div className="absolute -left-12 -top-12 w-24 h-24 bg-red-500/10 rounded-full blur-2xl animate-pulse" />
+            <div className="absolute -right-12 -bottom-12 w-24 h-24 bg-red-500/10 rounded-full blur-2xl animate-pulse" />
+
+            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center border-2 border-red-300 mb-4 text-4xl">
+              ⏰
+            </div>
+
+            <span className="text-[10px] uppercase tracking-widest bg-red-100 px-2 py-0.5 rounded font-mono font-bold text-red-700">
+              Time Attack Failed
+            </span>
+
+            <h3 id="failure_title" className="text-2xl font-serif font-black text-slate-900 mt-2">
+              Time has run out
+            </h3>
+            <p className="text-xs text-slate-500 font-serif italic mt-1 leading-relaxed">
+              You can try the timed challenge again or return to another mode.
+            </p>
+
+            <button
+              onClick={() => {
+                setSession((prev) => ({
+                  ...prev,
+                  currentLevel: getActiveLevel(),
+                  foundWords: [],
+                  bonusWordsFound: [],
+                  swipedLetters: [],
+                  score: 0,
+                  status: "playing",
+                }));
+                setRevealedCells({});
+                setTimeRemaining(45);
+                setIsTimerActive(true);
+                triggerToast("Time Attack retry started. Focus on the next run! ⏳");
+              }}
+              className="w-full py-3.5 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl text-white font-mono font-bold text-xs uppercase border border-red-700 hover:opacity-90 active:scale-95 transition-transform"
+            >
+              Retry Time Attack
+            </button>
+
+            <button
+              onClick={() => {
+                setSession((prev) => ({ ...prev, status: "playing" }));
+                setIsTimerActive(false);
+                triggerToast("Switched out of Time Attack mode. Choose another challenge.");
+              }}
+              className="w-full mt-3 py-3 rounded-2xl text-red-700 font-mono font-bold text-xs uppercase border border-red-300 hover:bg-red-50 transition-colors"
+            >
+              Return to mode selection
             </button>
           </div>
         </div>
