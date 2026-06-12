@@ -94,3 +94,31 @@ export interface AIPuzzlePayload {
   theme: string;
   difficulty: string;
 }
+
+export type AdminContentSource = "admin" | "import" | "ai";
+
+export interface UploadedContentMeta {
+  contentId: string;
+  source: AdminContentSource;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UploadedDictionaryWord extends SetswanaWord, UploadedContentMeta {}
+
+export interface UploadedLevel extends UploadedContentMeta {
+  level: Level;
+  validation: {
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+}
+
+export interface AdminContentBundle {
+  schemaVersion: 1;
+  words: UploadedDictionaryWord[];
+  levels: UploadedLevel[];
+  exportedAt?: string;
+}

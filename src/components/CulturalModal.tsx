@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { setswanaDictionary } from "../data/dictionary";
+import { SetswanaWord } from "../types";
 import { BookOpen, Search, Volume2, Globe, Heart, Award, X, Sparkles } from "lucide-react";
 import { soundEngine } from "./AudioSynthesizer";
 
@@ -7,6 +8,7 @@ interface CulturalModalProps {
   isOpen: boolean;
   onClose: () => void;
   highlightedWord?: string;
+  dictionaryWords?: SetswanaWord[];
 }
 
 interface Proverb {
@@ -15,7 +17,7 @@ interface Proverb {
   explanation: string;
 }
 
-export default function CulturalModal({ isOpen, onClose, highlightedWord }: CulturalModalProps) {
+export default function CulturalModal({ isOpen, onClose, highlightedWord, dictionaryWords = setswanaDictionary }: CulturalModalProps) {
   const [searchQuery, setSearchQuery] = useState(highlightedWord || "");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -69,7 +71,7 @@ export default function CulturalModal({ isOpen, onClose, highlightedWord }: Cult
     window.speechSynthesis.speak(utterance);
   };
 
-  const filteredWords = setswanaDictionary.filter(w => {
+  const filteredWords = dictionaryWords.filter(w => {
     const matchesSearch = w.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           w.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (w.culturalContext && w.culturalContext.toLowerCase().includes(searchQuery.toLowerCase()));

@@ -55,6 +55,10 @@ Prerequisites: Node.js 20+.
 
 The normal game is public. The admin console is hidden in production builds and is intended for local/admin use only.
 
+Admin-created words and levels are stored in browser `localStorage` under `lefoko_admin_content_bundle`. Static words and levels in `src/data/dictionary.ts` remain the fallback content. Use the admin export JSON action to back up local content before clearing browser data or changing devices.
+
+Imported level JSON must pass the same `validateLevel()` checks as static and AI-generated levels before it can be enabled for gameplay. Invalid levels are rejected by the admin tools and are not merged into active play.
+
 `POST /api/puzzle/generate` requires:
 
 ```text
@@ -82,6 +86,7 @@ Plain static hosting is not enough unless the API routes are adapted separately.
 
 - No user accounts or database.
 - Player progress is stored in browser `localStorage`.
-- Admin-added dictionary words and AI-generated levels are session/browser-only.
+- Admin-added dictionary words, imported levels, and saved AI-generated levels are local to the current browser until exported as JSON.
+- No database or cloud sync exists yet for admin content.
 - Admin analytics and alert previews are demo data, not real telemetry or push notifications.
 - Setswana wording and cultural context should still be reviewed by a fluent Setswana speaker before wider launch.
