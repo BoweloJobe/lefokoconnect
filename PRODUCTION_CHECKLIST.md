@@ -12,14 +12,32 @@ Before a public launch:
 - [ ] `npm test` passes.
 - [ ] `npm run build` passes.
 - [ ] `npm start` serves the built frontend.
+- [ ] `/api/health` returns `status: ok` without exposing secrets.
+- [ ] Production Helmet CSP is active.
 - [ ] Static levels validate successfully.
+- [ ] Static content includes at least 20 levels.
+- [ ] No known fake/filler words remain in static level content.
 - [ ] Gemini endpoints are rate limited.
 - [ ] Admin puzzle generation rejects missing/invalid tokens.
+- [ ] Admin token tested with a valid bearer token in a private environment.
 - [ ] Mock admin analytics and local alert previews are not presented as real telemetry.
 - [ ] Generated AI levels are validated before use.
 - [ ] Imported/admin levels validate before they are enabled.
+- [ ] Corrupt admin `localStorage` falls back safely to static content.
+- [ ] Corrupt user stats `localStorage` falls back safely.
 - [ ] Admin content export JSON has been downloaded/copied as a backup if custom browser content matters.
+- [ ] Admin import merge tested.
+- [ ] Admin import replace tested with an intentional backup.
 - [ ] Team understands admin content is localStorage-only; there is no database or cloud sync yet.
-- [ ] Manual mobile check completed for game board, letter wheel, and modals.
+- [ ] Daily reward farming blocked after refresh/replay.
+- [ ] Bonus word reward farming blocked after reset/replay.
+- [ ] Hint costs verified during practice replay.
+- [ ] Time Attack failure Retry recovers cleanly.
+- [ ] Time Attack failure Return to Classic recovers cleanly.
+- [ ] Manual mobile check completed at 360x640: status, board, clue, wheel, hints, and menu visible.
+- [ ] Manual mobile check completed at 390x844: status, board, clue, wheel, hints, and menu visible.
+- [ ] Manual mobile check completed at 430x932: status, board, clue, wheel, hints, and menu visible.
 - [ ] Manual keyboard check completed for modal open/close controls.
 - [ ] Gemini quota/billing limits reviewed in the Google AI/Gemini console.
+- [ ] Export backup tested before any public demo with custom content.
+- [ ] Deployed link smoke tested on a real phone.

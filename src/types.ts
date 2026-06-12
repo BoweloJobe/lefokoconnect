@@ -67,6 +67,11 @@ export interface UserStats {
   totalWordsSolved: number;
   achievements: Achievement[];
   dailyCompletion: Record<string, boolean>;
+  rewardClaims: {
+    mainWords: Record<string, boolean>;
+    levelCompletions: Record<string, boolean>;
+    bonusWords: Record<string, boolean>;
+  };
 }
 
 export interface GameSessionState {

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { GridWord } from "../types";
 
 interface CrosswordBoardProps {
@@ -61,7 +61,7 @@ export default function CrosswordBoard({
       id="crossword_board_wrapper"
     >
       <div
-        className="grid w-[min(calc(100vw-1rem),33dvh,14rem)] sm:w-auto gap-0.5 sm:gap-1.5 p-1 sm:p-2 bg-slate-900/5 rounded-lg sm:rounded-xl border border-gray-200/40"
+        className="grid w-[min(calc(100vw-1rem),33dvh,14rem)] max-[700px]:w-[min(calc(100vw-1rem),29dvh,13rem)] sm:w-auto gap-0.5 sm:gap-1.5 p-1 sm:p-2 bg-slate-900/5 rounded-lg sm:rounded-xl border border-gray-200/40"
         style={{
           gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
         }}
@@ -83,6 +83,10 @@ export default function CrosswordBoard({
             const isGuessed = cell.wordRefs.some((wordRef) => foundWords.includes(wordRef.toUpperCase()));
             const isIndividualHintRevealed = !!revealedCells[cellKey];
             const displayLetter = isGuessed ? cell.letter : isIndividualHintRevealed ? revealedCells[cellKey] : "";
+            const clueSummary = gridWords
+              .filter((gw) => cell.wordRefs.includes(gw.word))
+              .map((gw) => `${gw.word.length} letters${gw.clue ? `: ${gw.clue}` : ""}`)
+              .join(" / ");
 
             // Style state
             let boxBg = "bg-white border-orange-100 shadow-sm";
@@ -113,6 +117,7 @@ export default function CrosswordBoard({
                   }
                 }}
                 disabled={!gridWords.some((gw) => cell.wordRefs.includes(gw.word) && gw.clue)}
+                aria-label={`Crossword cell row ${rIdx + 1}, column ${cIdx + 1}. ${isGuessed ? `Solved letter ${cell.letter}.` : isIndividualHintRevealed ? `Hint letter ${displayLetter}.` : "Unsolved."} ${clueSummary}`}
                 className={`relative aspect-square w-full rounded-md sm:rounded-lg border sm:border-2 flex items-center justify-center transition-all duration-300 focus:outline-none hover:border-amber-400 hover:scale-105 active:scale-95 ${boxBg}`}
               >
                 {/* Visual grid cell content */}
@@ -123,7 +128,7 @@ export default function CrosswordBoard({
                 {/* Level index anchor indicator inside peak boxes */}
                 {cell.isPeakOfWord && !isGuessed && !isIndividualHintRevealed && (
                   <div className="absolute top-0 left-0.5 sm:top-0.5 sm:left-1 text-[7px] sm:text-[9px] text-gray-400 font-mono font-bold">
-                    ✎
+                    *
                   </div>
                 )}
               </button>
@@ -133,7 +138,7 @@ export default function CrosswordBoard({
       </div>
 
       <p className="hidden sm:flex text-xs text-gray-400 font-mono mt-4 items-center gap-1">
-        <span>💡</span> Tap on cells to inspect clues for that word slot!
+        <span>Tip:</span> Tap on cells to inspect clues for that word slot!
       </p>
     </div>
   );

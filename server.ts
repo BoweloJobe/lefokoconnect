@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -13,9 +14,41 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === "production";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: isProduction
+    ? {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:"],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'", "data:"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          frameAncestors: ["'none'"],
+        },
+      }
+    : false,
+}));
 app.use(express.json({ limit: "20kb" }));
+
+function warnProductionConfig() {
+  if (!isProduction) return;
+  if (!process.env.APP_URL) {
+    console.warn("APP_URL is not configured. Set it to the public deployed origin.");
+  }
+  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY") {
+    console.warn("GEMINI_API_KEY is not configured. Base gameplay still works, but AI hints/generation will use fallbacks.");
+  }
+  if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN === "change-me-to-a-long-random-token") {
+    console.warn("ADMIN_TOKEN is not configured. Admin AI puzzle generation will return 503.");
+  }
+}
+
+warnProductionConfig();
 
 const aiRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -89,7 +122,10 @@ function requireAdminToken(req: express.Request, res: express.Response, next: ex
 
   const header = req.header("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
-  if (token !== expectedToken) {
+  const tokenBuffer = Buffer.from(token);
+  const expectedBuffer = Buffer.from(expectedToken);
+  const tokenMatches = tokenBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(tokenBuffer, expectedBuffer);
+  if (!tokenMatches) {
     return res.status(401).json({ error: "Admin token required." });
   }
 
@@ -170,7 +206,7 @@ app.post("/api/puzzle/generate", puzzleRateLimit, requireAdminToken, async (req,
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: GEMINI_MODEL,
       contents: promptText,
       config: {
         systemInstruction: "You compile word puzzles containing Setswana vocabulary. You speak fluent Setswana and English.",
@@ -283,7 +319,7 @@ app.post("/api/hint/explain", aiRateLimit, async (req, res) => {
     const ai = getAIClient();
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: GEMINI_MODEL,
       contents: `Provide a short, rich, 2-sentence cultural summary and grammatical context for the Setswana word: "${normalizedWord}" (category: ${category}). Translate it to English and explain its significance in Botswana villages, agricultural culture, traditional food, or leadership. Keep it compact.`,
     });
 

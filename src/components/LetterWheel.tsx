@@ -76,6 +76,7 @@ export default function LetterWheel({
 
   // Handle shuffling letter node order locally (with visual feedback)
   const handleShuffle = () => {
+    if (!isInputEnabled) return;
     soundEngine.playShuffle();
     if (onShuffleRequest) {
       onShuffleRequest();
@@ -318,7 +319,7 @@ export default function LetterWheel({
   return (
     <div className="flex flex-col items-center select-none shrink-0" id="letter_wheel_container">
       {/* Dynamic Overlay Preview */}
-      <div className="h-7 sm:h-12 flex flex-col items-center justify-center mb-1 sm:mb-6 gap-1 sm:gap-2">
+      <div className="h-7 max-[700px]:h-5 sm:h-12 flex flex-col items-center justify-center mb-1 sm:mb-6 gap-1 sm:gap-2">
           {swipedWordPreview && (
             <>
               <div
@@ -334,6 +335,7 @@ export default function LetterWheel({
               <button
                 type="button"
                 onClick={submitSelectedWord}
+                aria-label={`Submit selected word ${swipedWordPreview}`}
                 className="px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full bg-white/90 border border-slate-300 text-slate-700 text-[9px] sm:text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition"
               >
                 Submit
@@ -342,7 +344,7 @@ export default function LetterWheel({
         )}
       </div>
 
-      <div className="relative w-[min(54vw,13.25rem)] h-[min(54vw,13.25rem)] sm:w-72 sm:h-72 flex items-center justify-center">
+      <div className="relative w-[min(54vw,13.25rem)] h-[min(54vw,13.25rem)] max-[700px]:w-[min(50vw,12rem)] max-[700px]:h-[min(50vw,12rem)] sm:w-72 sm:h-72 flex items-center justify-center">
         {/* Modern tribal outer pattern backing */}
         <div className="absolute inset-0 rounded-full border border-dashed border-gray-300 opacity-20 animate-spin" style={{ animationDuration: "120s" }} />
         <div className="absolute inset-4 rounded-full border border-double border-orange-200 opacity-30" />
@@ -350,6 +352,7 @@ export default function LetterWheel({
         {/* Circular Wheel interactive Canvas */}
         <svg
           ref={svgRef}
+          aria-label="Letter wheel. Swipe letters to submit a word, or tap letters then use Submit."
           className="relative z-10 w-full h-full overflow-visible touch-none"
           viewBox="0 0 280 280"
           onPointerDown={startDrag}
@@ -476,7 +479,8 @@ export default function LetterWheel({
           onClick={handleShuffle}
           id="shuffle_letters_btn"
           aria-label="Shuffle Letters"
-          className="absolute z-20 w-12 h-12 bg-white rounded-full flex items-center justify-center border shadow-md hover:scale-110 active:scale-95 transition-transform duration-200"
+          disabled={!isInputEnabled}
+          className="absolute z-20 w-12 h-12 bg-white rounded-full flex items-center justify-center border shadow-md hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 transition-transform duration-200"
           style={{ borderColor: accentColor }}
         >
           <Shuffle size={18} className="text-gray-700 hover:text-amber-600 transition-colors" />

@@ -145,157 +145,73 @@ export const setswanaDictionary: SetswanaWord[] = [
 ];
 
 export const staticLevels: Level[] = [
-  {
-    id: 1,
-    levelNumber: 1,
-    title: "Cattle Post (Moraka)",
-    letters: ["K", "G", "O", "M", "O"],
-    mainWords: ["KGOMO", "MOGO"],
-    bonusWords: ["GO", "MO", "MOKO"],
-    gridSize: 5,
-    difficulty: "beginner",
-    themeName: "Kalahari Grazing Lands",
-    gridWords: [
-      { word: "KGOMO", r: 1, c: 0, direction: "H", clue: "The essential Setswana animal representing livestock wealth and bride wealth." },
-      { word: "MOGO", r: 1, c: 3, direction: "V", clue: "A traditional wild fig tree or wooden bowl." }
-    ]
-  },
-  {
-    id: 2,
-    levelNumber: 2,
-    title: "The Oasis of Life",
-    letters: ["M", "E", "T", "S", "I"],
-    mainWords: ["METSI", "TSE"],
-    bonusWords: ["ME", "ITE", "SITE"],
-    gridSize: 5,
-    difficulty: "beginner",
-    themeName: "Okavango Waterways",
-    gridWords: [
-      { word: "METSI", r: 1, c: 0, direction: "H", clue: "The most sacred natural substance in Botswana; water is life." },
-      { word: "TSE", r: 1, c: 2, direction: "V", clue: "These ones (demonstrative)." }
-    ]
-  },
-  {
-    id: 3,
-    levelNumber: 3,
-    title: "Whispers of Sunshine",
-    letters: ["P", "U", "L", "A"],
-    mainWords: ["PULA", "ALU"],
-    bonusWords: ["LAP", "LA"],
-    gridSize: 5,
-    difficulty: "beginner",
-    themeName: "Summer rain blessings",
-    gridWords: [
-      { word: "PULA", r: 1, c: 0, direction: "H", clue: "Botswana's national currency, and also the word for a rain shower blessing." },
-      { word: "ALU", r: 1, c: 3, direction: "V", clue: "An abstract particle, or root descriptor." }
-    ]
-  },
-  {
-    id: 4,
-    levelNumber: 4,
-    title: "The Heart's Rhythm",
-    letters: ["L", "E", "R", "A", "T", "O"],
-    mainWords: ["LERATO", "RETA"],
-    bonusWords: ["LE", "A", "TE", "LATE", "TELA", "TARE"],
-    gridSize: 8,
-    difficulty: "intermediate",
-    themeName: "Setswana Family Bonds",
-    gridWords: [
-      { word: "LERATO", r: 1, c: 1, direction: "H", clue: "Love — the core sentiment used in beautiful country name songs." },
-      { word: "RETA", r: 1, c: 3, direction: "V", clue: "To praise or recite poetry celebrating village heroes." }
-    ]
-  },
-  {
-    id: 5,
-    levelNumber: 5,
-    title: "Kgotla Parliament",
-    letters: ["L", "E", "F", "O", "K", "O"],
-    mainWords: ["LEFOKO", "FOKO"],
-    bonusWords: ["KOLO", "LK", "FE"],
-    gridSize: 8,
-    difficulty: "intermediate",
-    themeName: "Tlokweng Tribal Assembly",
-    gridWords: [
-      { word: "LEFOKO", r: 2, c: 1, direction: "H", clue: "Setswana word or message, central to oral stories." },
-      { word: "FOKO", r: 2, c: 3, direction: "V", clue: "Root of Lefoko, of speech." }
-    ]
-  },
-  {
-    id: 6,
-    levelNumber: 6,
-    title: "Farming the Land",
-    letters: ["T", "E", "M", "O", "R", "A"],
-    mainWords: ["TEMO", "MORA"],
-    bonusWords: ["MO", "TE", "EMO", "MERA"],
-    gridSize: 7,
-    difficulty: "intermediate",
-    themeName: "Chobe Sorghum Fields",
-    gridWords: [
-      { word: "TEMO", r: 1, c: 1, direction: "H", clue: "Traditional agriculture or tillage." },
-      { word: "MORA", r: 1, c: 3, direction: "V", clue: "Regional clan name roots or collective spaces." }
-    ]
-  },
-  {
-    id: 7,
-    levelNumber: 7,
-    title: "Ancestral Canopy",
-    letters: ["M", "O", "R", "A", "F", "E"],
-    mainWords: ["MORAFE"],
-    bonusWords: ["MO", "RA", "FE", "MERA", "EF"],
-    gridSize: 8,
-    difficulty: "advanced",
-    themeName: "Ancestral Baobab tree canopy",
-    gridWords: [
-      { word: "MORAFE", r: 3, c: 1, direction: "H", clue: "Tribe or nation, describing regional kinship groups." }
-    ]
-  },
-  {
-    id: 8,
-    levelNumber: 8,
-    title: "The Desert Sky",
-    letters: ["N", "A", "L", "E", "D", "I"],
-    mainWords: ["NALEDI", "DELA"],
-    bonusWords: ["DA", "NE", "ELI", "LINDA", "NILA"],
-    gridSize: 8,
-    difficulty: "advanced",
-    themeName: "Kalahari Clear Nights",
-    gridWords: [
-      { word: "NALEDI", r: 1, c: 1, direction: "H", clue: "Beautiful star, guiding lost travelers." },
-      { word: "DELA", r: 1, c: 5, direction: "V", clue: "To sacrifice or surrender to the higher ancestral forces." }
-    ]
-  },
-  {
-    id: 9,
-    levelNumber: 9,
-    title: "Wild Zebra Hues",
-    letters: ["P", "I", "T", "S", "E"],
-    mainWords: ["PITSE", "TSE"],
-    bonusWords: ["PI", "SITE", "SE", "ITE"],
-    gridSize: 6,
-    difficulty: "expert",
-    themeName: "Makgadikgadi Salt Zebra Migration",
-    gridWords: [
-      { word: "PITSE", r: 2, c: 1, direction: "H", clue: "Zebra, our national treasure on Botswana's shield." },
-      { word: "TSE", r: 2, c: 3, direction: "V", clue: "Demonstrative collective plural for things." }
-    ]
-  },
-  {
-    id: 10,
-    levelNumber: 10,
-    title: "Royal Chief Legacy",
-    letters: ["K", "G", "O", "S", "I"],
-    mainWords: ["KGOSI", "IGO"],
-    bonusWords: ["GO", "SI", "KGO", "ISO"],
-    gridSize: 6,
-    difficulty: "expert",
-    themeName: "Bakwena Monarchs",
-    gridWords: [
-      { word: "KGOSI", r: 2, c: 0, direction: "H", clue: "The respected leader, king, or chief of the community council." },
-      { word: "IGO", r: 1, c: 1, direction: "V", clue: "The focal point or glowing coals of traditional hearths." }
-    ]
-  }
+  { id: 1, levelNumber: 1, title: "Cattle Post", letters: ["K", "G", "O", "M", "O"], mainWords: ["KGOMO", "MOGO"], bonusWords: ["GO", "MO"], gridSize: 5, difficulty: "beginner", themeName: "Kalahari Grazing Lands", gridWords: [
+    { word: "KGOMO", r: 1, c: 0, direction: "H", clue: "Cattle, a central sign of livelihood and wealth in Setswana life." },
+    { word: "MOGO", r: 1, c: 3, direction: "V", clue: "A traditional wild fig tree or wooden bowl." },
+  ] },
+  { id: 2, levelNumber: 2, title: "Water Blessing", letters: ["M", "E", "T", "S", "I"], mainWords: ["METSI", "TSE"], bonusWords: ["ME", "SE"], gridSize: 5, difficulty: "beginner", themeName: "Okavango Waterways", gridWords: [
+    { word: "METSI", r: 1, c: 0, direction: "H", clue: "Water, precious in Botswana's dry climate." },
+    { word: "TSE", r: 1, c: 2, direction: "V", clue: "A Setswana demonstrative meaning these ones." },
+  ] },
+  { id: 3, levelNumber: 3, title: "Pula Call", letters: ["P", "U", "L", "A"], mainWords: ["PULA"], bonusWords: ["LA"], gridSize: 5, difficulty: "beginner", themeName: "Summer rain blessings", gridWords: [
+    { word: "PULA", r: 2, c: 0, direction: "H", clue: "Rain, blessing, and the name of Botswana's currency." },
+  ] },
+  { id: 4, levelNumber: 4, title: "Open Road", letters: ["T", "S", "E", "L", "A"], mainWords: ["TSELA"], bonusWords: ["SE", "LA"], gridSize: 5, difficulty: "beginner", themeName: "Kalahari Grazing Lands", gridWords: [
+    { word: "TSELA", r: 2, c: 0, direction: "H", clue: "A path or road; also a metaphor for a life journey." },
+  ] },
+  { id: 5, levelNumber: 5, title: "Learning Fire", letters: ["T", "H", "U", "T", "O"], mainWords: ["THUTO"], bonusWords: ["TO"], gridSize: 5, difficulty: "beginner", themeName: "Tlokweng Tribal Assembly", gridWords: [
+    { word: "THUTO", r: 2, c: 0, direction: "H", clue: "Education or learning, often passed through family and community." },
+  ] },
+  { id: 6, levelNumber: 6, title: "The Greeting", letters: ["D", "U", "M", "E", "L", "A"], mainWords: ["DUMELA"], bonusWords: ["ME", "LA"], gridSize: 6, difficulty: "intermediate", themeName: "Setswana Family Bonds", gridWords: [
+    { word: "DUMELA", r: 2, c: 0, direction: "H", clue: "A common Setswana greeting: hello." },
+  ] },
+  { id: 7, levelNumber: 7, title: "Heart Word", letters: ["L", "E", "R", "A", "T", "O"], mainWords: ["LERATO", "RETA"], bonusWords: ["LE", "LA"], gridSize: 7, difficulty: "intermediate", themeName: "Setswana Family Bonds", gridWords: [
+    { word: "LERATO", r: 1, c: 0, direction: "H", clue: "Love, also a popular name." },
+    { word: "RETA", r: 1, c: 2, direction: "V", clue: "To praise or recite praise poetry." },
+  ] },
+  { id: 8, levelNumber: 8, title: "Fields Of Work", letters: ["T", "E", "M", "O", "R", "A"], mainWords: ["TEMO", "MERA"], bonusWords: ["MO", "RA"], gridSize: 6, difficulty: "intermediate", themeName: "Chobe Sorghum Fields", gridWords: [
+    { word: "TEMO", r: 1, c: 1, direction: "H", clue: "Agriculture or tillage." },
+    { word: "MERA", r: 1, c: 3, direction: "V", clue: "A plural form used in everyday vocabulary practice." },
+  ] },
+  { id: 9, levelNumber: 9, title: "Chief's Word", letters: ["K", "G", "O", "S", "I"], mainWords: ["KGOSI"], bonusWords: ["GO", "SI"], gridSize: 5, difficulty: "intermediate", themeName: "Bakwena Monarchs", gridWords: [
+    { word: "KGOSI", r: 2, c: 0, direction: "H", clue: "A chief or traditional leader." },
+  ] },
+  { id: 10, levelNumber: 10, title: "Zebra Shield", letters: ["P", "I", "T", "S", "E"], mainWords: ["PITSE", "TSE"], bonusWords: ["SE", "PI"], gridSize: 6, difficulty: "intermediate", themeName: "Makgadikgadi Salt Zebra Migration", gridWords: [
+    { word: "PITSE", r: 2, c: 0, direction: "H", clue: "Zebra or horse; the zebra is a national symbol of Botswana." },
+    { word: "TSE", r: 2, c: 2, direction: "V", clue: "These ones, a useful demonstrative form." },
+  ] },
+  { id: 11, levelNumber: 11, title: "Council Circle", letters: ["K", "G", "O", "T", "L", "A"], mainWords: ["KGOTLA"], bonusWords: ["GO", "LA"], gridSize: 6, difficulty: "advanced", themeName: "Tlokweng Tribal Assembly", gridWords: [
+    { word: "KGOTLA", r: 2, c: 0, direction: "H", clue: "A public council place for community discussion." },
+  ] },
+  { id: 12, levelNumber: 12, title: "Word Craft", letters: ["L", "E", "F", "O", "K", "O"], mainWords: ["LEFOKO"], bonusWords: ["KO", "LO"], gridSize: 6, difficulty: "advanced", themeName: "Tlokweng Tribal Assembly", gridWords: [
+    { word: "LEFOKO", r: 2, c: 0, direction: "H", clue: "A word, speech, or message." },
+  ] },
+  { id: 13, levelNumber: 13, title: "Star Path", letters: ["N", "A", "L", "E", "D", "I"], mainWords: ["NALEDI"], bonusWords: ["LE", "DI"], gridSize: 6, difficulty: "advanced", themeName: "Kalahari Clear Nights", gridWords: [
+    { word: "NALEDI", r: 2, c: 0, direction: "H", clue: "A star; a guide in the night sky." },
+  ] },
+  { id: 14, levelNumber: 14, title: "Hope Road", letters: ["T", "S", "H", "E", "P", "O"], mainWords: ["TSHEPO"], bonusWords: ["PO", "SE"], gridSize: 6, difficulty: "advanced", themeName: "Setswana Family Bonds", gridWords: [
+    { word: "TSHEPO", r: 2, c: 0, direction: "H", clue: "Trust or hope; also a common name." },
+  ] },
+  { id: 15, levelNumber: 15, title: "Child Blessing", letters: ["N", "G", "W", "A", "N", "A"], mainWords: ["NGWANA"], bonusWords: ["NA"], gridSize: 6, difficulty: "advanced", themeName: "Setswana Family Bonds", gridWords: [
+    { word: "NGWANA", r: 2, c: 0, direction: "H", clue: "A child, treasured in family and community life." },
+  ] },
+  { id: 16, levelNumber: 16, title: "People Together", letters: ["M", "O", "R", "A", "F", "E"], mainWords: ["MORAFE"], bonusWords: ["MO"], gridSize: 6, difficulty: "advanced", themeName: "Ancestral Baobab tree canopy", gridWords: [
+    { word: "MORAFE", r: 2, c: 0, direction: "H", clue: "A tribe, nation, or people." },
+  ] },
+  { id: 17, levelNumber: 17, title: "Let's Gather", letters: ["A", "R", "E", "N", "G"], mainWords: ["ARENG"], bonusWords: ["RE"], gridSize: 5, difficulty: "advanced", themeName: "Tlokweng Tribal Assembly", gridWords: [
+    { word: "ARENG", r: 2, c: 0, direction: "H", clue: "An expression like let's go or come along." },
+  ] },
+  { id: 18, levelNumber: 18, title: "Needle Work", letters: ["M", "A", "O"], mainWords: ["MAO"], bonusWords: ["MO"], gridSize: 4, difficulty: "beginner", themeName: "Setswana Family Bonds", gridWords: [
+    { word: "MAO", r: 1, c: 0, direction: "H", clue: "Needles used in sewing or craft work." },
+  ] },
+  { id: 19, levelNumber: 19, title: "Fig Bowl", letters: ["M", "O", "G", "O"], mainWords: ["MOGO"], bonusWords: ["MO", "GO"], gridSize: 4, difficulty: "beginner", themeName: "Kalahari Grazing Lands", gridWords: [
+    { word: "MOGO", r: 1, c: 0, direction: "H", clue: "A wild fig tree or wooden bowl." },
+  ] },
+  { id: 20, levelNumber: 20, title: "Rain And Road", letters: ["P", "U", "L", "A", "T", "S", "E"], mainWords: ["PULA", "TSELA"], bonusWords: ["SE", "LA"], gridSize: 7, difficulty: "expert", themeName: "Summer rain blessings", gridWords: [
+    { word: "PULA", r: 0, c: 5, direction: "V", clue: "Rain and blessing." },
+    { word: "TSELA", r: 3, c: 1, direction: "H", clue: "A road, path, or route." },
+  ] },
 ];
-
 if ((import.meta as any).env?.DEV) {
   const validation = validateLevels(staticLevels);
   if (validation.valid) {

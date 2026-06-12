@@ -55,6 +55,17 @@ describe("adminContentStore", () => {
     expect(result.bundle.levels).toEqual([]);
   });
 
+  it("returns a safe empty bundle for unsupported schema versions", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(ADMIN_CONTENT_STORAGE_KEY, JSON.stringify({ schemaVersion: 999, words: [], levels: [] }));
+
+    const result = loadAdminContentBundle(storage);
+
+    expect(result.ok).toBe(false);
+    expect(result.bundle).toEqual(createEmptyAdminContentBundle());
+    expect(result.errors[0]).toContain("Unsupported admin content schemaVersion");
+  });
+
   it("saves and loads a valid uploaded level", () => {
     const storage = new MemoryStorage();
     const uploaded = createUploadedLevel(validLevel);

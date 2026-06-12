@@ -26,6 +26,22 @@ function parseLevelJson(json: string): Level {
   return parsed.level ? parsed.level : parsed;
 }
 
+function mergeBundles(current: AdminContentBundle, incoming: AdminContentBundle): AdminContentBundle {
+  const wordKeys = new Set(current.words.map((word) => word.word.toUpperCase()));
+  const levelKeys = new Set(current.levels.map((item) => `${item.level.id}:${item.level.levelNumber}`));
+  return {
+    ...current,
+    words: [
+      ...current.words,
+      ...incoming.words.filter((word) => !wordKeys.has(word.word.toUpperCase())),
+    ],
+    levels: [
+      ...current.levels,
+      ...incoming.levels.filter((item) => !levelKeys.has(`${item.level.id}:${item.level.levelNumber}`)),
+    ],
+  };
+}
+
 export default function AdminPanel({
   adminContentBundle,
   onAdminContentBundleChange,
@@ -170,14 +186,27 @@ export default function AdminPanel({
     onTriggerGlobalToast("Admin content export JSON prepared.");
   };
 
-  const handleImport = () => {
+  const parseImportBundle = () => {
     const result = importAdminContentBundle(importJson);
     if (!result.ok) {
       onTriggerGlobalToast(`Import failed: ${result.errors[0]}`);
-      return;
+      return null;
     }
-    saveBundle(result.bundle);
-    onTriggerGlobalToast("Imported admin content into local browser storage.");
+    return result.bundle;
+  };
+
+  const handleMergeImport = () => {
+    const bundle = parseImportBundle();
+    if (!bundle) return;
+    saveBundle(mergeBundles(adminContentBundle, bundle));
+    onTriggerGlobalToast("Merged imported admin content into local browser storage.");
+  };
+
+  const handleReplaceImport = () => {
+    const bundle = parseImportBundle();
+    if (!bundle) return;
+    saveBundle(bundle);
+    onTriggerGlobalToast("Replaced local admin content with imported bundle.");
   };
 
   const triggerAIPuzzleGeneration = async () => {
@@ -393,8 +422,11 @@ export default function AdminPanel({
           <div className="space-y-4">
             <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#7A5A3A]">Import Bundle JSON</h3>
             <textarea value={importJson} onChange={(e) => setImportJson(e.target.value)} rows={14} placeholder="Paste exported AdminContentBundle JSON here" className="w-full px-3 py-2 border rounded-xl bg-white text-xs font-mono" />
-            <button onClick={handleImport} className="w-full py-2.5 rounded-xl text-white font-mono font-bold text-xs uppercase flex items-center justify-center gap-1 bg-[#6FA8DC] border border-blue-500">
-              <Upload size={14} /> Import To Local Storage
+            <button onClick={handleMergeImport} className="w-full py-2.5 rounded-xl text-white font-mono font-bold text-xs uppercase flex items-center justify-center gap-1 bg-[#6FA8DC] border border-blue-500">
+              <Upload size={14} /> Merge Import
+            </button>
+            <button onClick={handleReplaceImport} className="w-full py-2.5 rounded-xl text-red-700 font-mono font-bold text-xs uppercase flex items-center justify-center gap-1 border border-red-300 hover:bg-red-50">
+              Replace Local Content
             </button>
           </div>
         </div>

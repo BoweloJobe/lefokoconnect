@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Trophy,
   Zap,
@@ -22,22 +22,15 @@ import {
 import { soundEngine } from "./components/AudioSynthesizer";
 import { staticLevels, themeBackgrounds, setswanaDictionary } from "./data/dictionary";
 import { getDailyDateKey, pickDailyLevel } from "./domain/dailyLevelUtils";
-import { AdminContentBundle, Level, UserStats, GameSessionState, Achievement } from "./types";
+import { AdminContentBundle, Level, UserStats, GameSessionState } from "./types";
 import { loadAdminContentBundle, saveAdminContentBundle } from "./domain/adminContentStore";
 import { mergeDictionaryWords, mergeLevels } from "./domain/contentMerge";
+import { applyBonusWordReward, applyHintCost, applyLevelCompletionReward, applyMainWordReward, completionClaimKey, isDailyPracticeReplay, resolveFailedTimeAttackReturnMode, resolveTimeAttackExpiryStatus, shouldAcceptMainWord, type ClaimContext } from "./domain/gameplayRewards";
+import { loadUserStats, saveUserStats } from "./domain/userStatsStore";
 import LetterWheel from "./components/LetterWheel";
 import CrosswordBoard from "./components/CrosswordBoard";
 import CulturalModal from "./components/CulturalModal";
 import AdminPanel from "./components/AdminPanel";
-
-// Handcrafted achievements baseline
-const defaultAchievements: Achievement[] = [
-  { id: "first_solve", title: "Mothomogolo (Beginner)", description: "Solve your very first Setswana word connection.", iconName: "Award", requiredValue: 1, currentValue: 0, rewardCoins: 100, unlocked: false },
-  { id: "five_levels", title: "Molemi (Cultivator)", description: "Complete 5 standard classic game levels.", iconName: "Trophy", requiredValue: 5, currentValue: 0, rewardCoins: 250, unlocked: false },
-  { id: "dictionary_look", title: "Molebedi (Observer)", description: "Browse the cultural dictionary terms catalog.", iconName: "BookOpen", requiredValue: 1, currentValue: 0, rewardCoins: 50, unlocked: false },
-  { id: "bonus_word", title: "Mosola (Resourceful)", description: "Discover 3 auxiliary bonus vocabulary terms.", iconName: "Star", requiredValue: 3, currentValue: 0, rewardCoins: 150, unlocked: false },
-  { id: "streak_3", title: "Legae (Homeowner)", description: "Maintain a 3-day consecutive login loyalty streak.", iconName: "Heart", requiredValue: 3, currentValue: 0, rewardCoins: 500, unlocked: false },
-];
 
 export default function App() {
   const isAdminAvailable = (import.meta as any).env?.DEV;
@@ -67,19 +60,7 @@ export default function App() {
   );
 
   // Game States
-  const [userStats, setUserStats] = useState<UserStats>({
-    xp: 0,
-    coins: 400, // starting wealth for hints
-    gems: 25,
-    level: 1,
-    dailyStreak: 1,
-    lastLoginDate: new Date().toISOString().split("T")[0],
-    classicLevelProgress: 1,
-    bonusBankSize: 0,
-    totalWordsSolved: 0,
-    achievements: defaultAchievements,
-    dailyCompletion: {},
-  });
+  const [userStats, setUserStats] = useState<UserStats>(() => loadUserStats());
 
   const getActiveLevel = (): Level => {
     // Return Level matching progress, or fallback to first one safely
@@ -116,34 +97,27 @@ export default function App() {
 
   // Active toast notification alert state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [lastCompletionWasPractice, setLastCompletionWasPractice] = useState(false);
+  const acceptedMainWordsRef = useRef<Set<string>>(new Set());
 
   // Load state from local storage on component boot
   useEffect(() => {
-    const cached = localStorage.getItem("lefoko_user_stats");
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setUserStats(parsed);
-      } catch (e) {
-        console.error("Local state parse error", e);
-      }
-    }
-
     // Display welcome banner
-    triggerToast("Welcome back to LefokoConnect! Dumela! ?? Enjoy the beautiful language and music of Botswana!");
+    triggerToast("Welcome back to LefokoConnect! Dumela! Enjoy the beautiful language and music of Botswana.");
   }, []);
 
   // Save changes to local storage from the latest state snapshot.
   const updateUserStats = (updater: (prev: UserStats) => UserStats) => {
     setUserStats((prev) => {
       const next = updater(prev);
-      localStorage.setItem("lefoko_user_stats", JSON.stringify(next));
-      return next;
+      return saveUserStats(next);
     });
   };
 
   // Re-sync session state whenever current level or mode transitions
   useEffect(() => {
+    acceptedMainWordsRef.current = new Set();
+    setLastCompletionWasPractice(false);
     setSession({
       currentLevel: selectedLevel,
       foundWords: [],
@@ -157,9 +131,12 @@ export default function App() {
     if (activeMode === "timed") {
       setTimeRemaining(45);
       setIsTimerActive(true);
-      triggerToast("Time Attack Mode started! Solve words rapidly to gain time extensions! ?");
+      triggerToast("Time Attack Mode started! Solve words rapidly to gain time extensions.");
     } else {
       setIsTimerActive(false);
+      if (activeMode === "daily" && userStats.dailyCompletion[getDailyDateKey()]) {
+        triggerToast("Daily already completed - replaying for practice.");
+      }
     }
   }, [selectedLevel, activeMode]);
 
@@ -189,8 +166,8 @@ export default function App() {
   }, [isTimerActive, timeRemaining, activeMode, session.status]);
 
   const triggerConsolidationFailedModal = () => {
-    triggerToast("? Time is up! Try again to achieve a higher score in Time Attack.");
-    setSession((prev) => ({ ...prev, status: "failed" }));
+    triggerToast("Time is up! Try again to achieve a higher score in Time Attack.");
+    setSession((prev) => ({ ...prev, status: resolveTimeAttackExpiryStatus() }));
   };
 
   // Sound Engine mute toggle handler
@@ -198,7 +175,7 @@ export default function App() {
     const state = !isMuted;
     setIsMuted(state);
     soundEngine.setMute(state);
-    triggerToast(state ? "Audio Synthesizer muted" : "Traditional audio effects enabled ??");
+    triggerToast(state ? "Audio Synthesizer muted" : "Traditional audio effects enabled.");
   };
 
   // Floating notification trigger
@@ -219,53 +196,34 @@ export default function App() {
     return true;
   };
 
-  const applyAchievementProgress = (
-    achievements: Achievement[],
-    increments: Array<{ id: string; amount: number }>,
-  ) => {
-    const unlockedMessages: string[] = [];
-    const incrementMap = new Map(increments.map((item) => [item.id, item.amount]));
-
-    const updatedAchievements = achievements.map((ach) => {
-      const amount = incrementMap.get(ach.id) || 0;
-      if (!amount) return ach;
-
-      const nextValue = Math.min(ach.requiredValue, ach.currentValue + amount);
-      const newlyUnlocked = !ach.unlocked && nextValue >= ach.requiredValue;
-      if (newlyUnlocked) {
-        unlockedMessages.push(`?? ACHIEVEMENT UNLOCKED: "${ach.title}"! Claimed bonus rewards!`);
-      }
-
-      return {
-        ...ach,
-        currentValue: nextValue,
-        unlocked: ach.unlocked || newlyUnlocked,
-        unlockedAt: newlyUnlocked ? new Date().toISOString() : ach.unlockedAt,
-      };
-    });
-
-    return { updatedAchievements, unlockedMessages };
-  };
+  const getClaimContext = (mode: typeof activeMode = activeMode, activeLevel: Level = level): ClaimContext => ({
+    mode,
+    level: activeLevel,
+    dailyDateKey: mode === "daily" ? getDailyDateKey() : undefined,
+  });
 
   const resolveMainWord = (targetWord: string, options: { hintCost?: number; source?: "swipe" | "word_hint" } = {}) => {
     if (!guardActiveGameplay()) return;
 
     const uppercaseWord = targetWord.toUpperCase();
-    if (session.foundWords.includes(uppercaseWord)) {
+    if (!shouldAcceptMainWord(session.foundWords, acceptedMainWordsRef.current, uppercaseWord)) {
       triggerToast(`You already found the word: "${uppercaseWord}"!`);
       return;
     }
+    acceptedMainWordsRef.current.add(uppercaseWord);
     const updatedFound = [...session.foundWords, uppercaseWord];
     const isLevelFinished = updatedFound.length === level.mainWords.length;
-    const earnedXp = isLevelFinished ? 80 : 25;
-    const earnedCoins = isLevelFinished ? 100 : 30;
     const hintCost = options.hintCost || 0;
-    const currentDailyKey = getDailyDateKey();
+    const claimContext = getClaimContext();
+    const isDailyPractice = activeMode === "daily" && !!claimContext.dailyDateKey && isDailyPracticeReplay(userStats, claimContext.dailyDateKey);
+    const completionAlreadyClaimed = isLevelFinished && !!userStats.rewardClaims.levelCompletions[completionClaimKey(claimContext)];
+    let rewardMessage = "";
 
     soundEngine.playSuccessWord();
     if (isLevelFinished) {
       soundEngine.playLevelSuccess();
       setIsTimerActive(false);
+      setLastCompletionWasPractice(isDailyPractice || completionAlreadyClaimed);
     }
 
     setSession((prev) => ({
@@ -275,35 +233,48 @@ export default function App() {
     }));
 
     updateUserStats((prev) => {
-      const { updatedAchievements, unlockedMessages } = applyAchievementProgress(prev.achievements, [
-        { id: "first_solve", amount: 1 },
-        ...(isLevelFinished ? [{ id: "five_levels", amount: 1 }] : []),
-      ]);
-      unlockedMessages.forEach(triggerToast);
+      let nextStats = prev;
+      if (hintCost) {
+        const hint = applyHintCost(nextStats, hintCost);
+        if (!hint.allowed) {
+          rewardMessage = hint.message;
+          return nextStats;
+        }
+        nextStats = hint.stats;
+      }
 
-      return {
-        ...prev,
-        xp: prev.xp + earnedXp,
-        coins: prev.coins + earnedCoins - hintCost,
-        gems: prev.gems + (isLevelFinished ? 10 : 0),
-        classicLevelProgress: prev.classicLevelProgress,
-        totalWordsSolved: prev.totalWordsSolved + 1,
-        achievements: updatedAchievements,
-        dailyCompletion: activeMode === "daily" && isLevelFinished
-          ? { ...prev.dailyCompletion, [currentDailyKey]: true }
-          : prev.dailyCompletion,
-      };
+      const mainReward = applyMainWordReward(nextStats, claimContext, uppercaseWord);
+      nextStats = mainReward.stats;
+      mainReward.unlockedMessages.forEach(triggerToast);
+
+      let completionReward = null;
+      if (isLevelFinished) {
+        completionReward = applyLevelCompletionReward(nextStats, claimContext);
+        nextStats = completionReward.stats;
+        completionReward.unlockedMessages.forEach(triggerToast);
+      }
+
+      const totalXp = mainReward.amount.xp + (completionReward?.amount.xp || 0);
+      const totalCoins = mainReward.amount.coins + (completionReward?.amount.coins || 0);
+      const totalGems = mainReward.amount.gems + (completionReward?.amount.gems || 0);
+      const awardedAnything = mainReward.awarded || !!completionReward?.awarded;
+
+      rewardMessage = !awardedAnything
+        ? activeMode === "daily"
+          ? "Daily already completed - replaying for practice."
+          : "Practice replay - no duplicate reward."
+        : hintCost
+          ? `Complete word revealed: "${uppercaseWord}" slot resolved! +${totalCoins} Gold, +${totalXp} XP, +${totalGems} Gems, -${hintCost} Gold`
+          : `Correct grid word! +${totalCoins} Gold, +${totalXp} XP${totalGems ? `, +${totalGems} Gems` : ""}!`;
+
+      return nextStats;
     });
 
     if (activeMode === "timed") {
       setTimeRemaining((prev) => Math.min(99, prev + 12));
     }
 
-    triggerToast(
-      hintCost
-        ? `?? Complete word revealed: "${uppercaseWord}" slot resolved! +${earnedCoins} Gold, +${earnedXp} XP, -${hintCost} Gold`
-        : `Correct grid word! +${earnedCoins} Gold, +${earnedXp} XP! ??`,
-    );
+    triggerToast(rewardMessage || "Word accepted.");
   };
 
   // CORE EVALUATOR: Validate swiped words
@@ -338,20 +309,15 @@ export default function App() {
           ...prev,
           bonusWordsFound: updatedBonus,
         }));
-
-        triggerToast(`? Brilliant! "${uppercaseSwipe}" is a bonus word! Logged into the Setswana Bank (+15 Coins).`);
         updateUserStats((prev) => {
-          const { updatedAchievements, unlockedMessages } = applyAchievementProgress(prev.achievements, [
-            { id: "bonus_word", amount: 1 },
-          ]);
-          unlockedMessages.forEach(triggerToast);
-
-          return {
-            ...prev,
-            coins: prev.coins + 15,
-            bonusBankSize: prev.bonusBankSize + 1,
-            achievements: updatedAchievements,
-          };
+          const result = applyBonusWordReward(prev, getClaimContext(), uppercaseSwipe);
+          result.unlockedMessages.forEach(triggerToast);
+          triggerToast(
+            result.awarded
+              ? `Bonus word! "${uppercaseSwipe}" logged into the Setswana Bank (+15 Gold).`
+              : `Practice replay - "${uppercaseSwipe}" bonus reward already claimed.`,
+          );
+          return result.stats;
         });
       } else {
         // INVALID SCENE WORD
@@ -365,7 +331,8 @@ export default function App() {
   // HINT 1: Reveal single character coordinate box (50 coins)
   const triggerRevealLetterHint = () => {
     if (!guardActiveGameplay()) return;
-    if (userStats.coins < 50) {
+    const hintCheck = applyHintCost(userStats, 50);
+    if (!hintCheck.allowed) {
       triggerToast("Need more Gold Coins! Solve levels or bonus words to purchase hints.");
       soundEngine.playError();
       return;
@@ -403,12 +370,9 @@ export default function App() {
       [key]: randomCell.letter,
     }));
 
-    updateUserStats((prev) => ({
-      ...prev,
-      coins: prev.coins - 50,
-    }));
+    updateUserStats((prev) => applyHintCost(prev, 50).stats);
 
-    triggerToast(`?? Spark revealed of letter '${randomCell.letter}' inside crossword grid! (-50 Gold)`);
+    triggerToast(`Spark revealed letter '${randomCell.letter}' inside crossword grid! (-50 Gold)`);
   };
 
   // HINT 2: Reveal entire remaining unsolved word slot (120 coins)
@@ -434,7 +398,7 @@ export default function App() {
   // HINT 3: Gemini smart explanatory hint
   const triggerSmartAIHint = async (wordToExplain: string) => {
     if (!guardActiveGameplay()) return;
-    triggerToast("Asking the smart Kgotla oracle for cultural knowledge... ?");
+    triggerToast("Asking the smart Kgotla oracle for cultural knowledge...");
     try {
       const response = await fetch("/api/hint/explain", {
         method: "POST",
@@ -446,11 +410,11 @@ export default function App() {
       });
       const data = await response.json();
       if (data && data.explanation) {
-        triggerToast(`?? [Oracle Explains]: ${data.explanation}`);
+        triggerToast(`[Oracle Explains]: ${data.explanation}`);
       }
     } catch (e) {
       // Fallback
-      triggerToast(`?? [Cultural Meaning]: "${wordToExplain}" represents pristine Botswana language heritage! (Setup Gemini API in Settings to enable real-time smart help.)`);
+      triggerToast(`[Cultural Meaning]: "${wordToExplain}" represents pristine Botswana language heritage! (Setup Gemini API in Settings to enable real-time smart help.)`);
     }
   };
 
@@ -483,6 +447,8 @@ export default function App() {
   };
 
   const resetCurrentLevel = () => {
+    acceptedMainWordsRef.current = new Set();
+    setLastCompletionWasPractice(false);
     setSession({
       currentLevel: getActiveLevel(),
       foundWords: [],
@@ -537,7 +503,7 @@ export default function App() {
             className="text-amber-200/50 hover:text-white rounded-full p-0.5 hover:bg-slate-800 transition-colors"
             aria-label="Dismiss notification"
           >
-            ?
+            x
           </button>
         </div>
       )}
@@ -583,13 +549,13 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-4 font-mono select-none">
             {/* Coins indicator */}
             <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-amber-50 rounded-xl border border-amber-200/50 text-amber-800 font-black shadow-sm" title="Gold Coins Ledger">
-              <span className="text-sm sm:text-base">??</span>
+              <span className="text-[10px] sm:text-xs">Gold</span>
               <span className="text-xs sm:text-sm">{userStats.coins}</span>
             </div>
 
             {/* Gems indicator */}
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-sky-50 rounded-xl border border-sky-100 text-sky-800 font-black shadow-sm" title="Water Gems">
-              <span className="text-base">??</span>
+              <span className="text-xs">Gems</span>
               <span className="text-xs sm:text-sm">{userStats.gems}</span>
             </div>
 
@@ -636,7 +602,7 @@ export default function App() {
       </div>
 
       {/* MAIN GAMEPLAY CONTENT CONTAINER */}
-      <main className="flex-1 min-h-0 max-w-7xl mx-auto w-full px-2 sm:px-4 py-1.5 sm:py-8 grid lg:grid-cols-12 gap-2 sm:gap-6 relative z-10 items-stretch overflow-hidden md:overflow-visible" id="core_app_main_segment">
+      <main className="flex-1 min-h-0 max-w-7xl mx-auto w-full px-2 sm:px-4 py-1 max-[700px]:py-0.5 sm:py-8 grid lg:grid-cols-12 gap-1.5 max-[700px]:gap-1 sm:gap-6 relative z-10 items-stretch overflow-hidden md:overflow-visible" id="core_app_main_segment">
         
         {/* SIDE BAR LAYOUT SHEET (Progress track, Achievements Shelf) */}
         <section className="hidden lg:col-span-4 md:flex flex-col justify-between gap-5 bg-white/30 backdrop-blur-lg border border-orange-100/40 p-5 rounded-3xl shadow-lg">
@@ -644,7 +610,7 @@ export default function App() {
           {/* Level Header info card with descriptions */}
           <div className="p-4 bg-gradient-to-br from-amber-50/70 to-orange-100/60 rounded-2xl border border-amber-200/50">
             <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-[#7A5A3A] flex items-center gap-1">
-              <span>??</span> Scene Theme: {level.themeName}
+              <span>Theme:</span> {level.themeName}
             </span>
             <div className="flex items-center justify-between mt-2">
               <h2 className="text-xl font-serif font-black text-[#5C4024] truncate">
@@ -662,7 +628,7 @@ export default function App() {
             {/* Time Attack Countdown banner */}
             {activeMode === "timed" && (
               <div className="mt-3 p-2 bg-slate-900 rounded-xl text-white flex items-center justify-between font-mono text-sm shadow animate-pulse border border-slate-700">
-                <span className="flex items-center gap-1.5 font-bold">?? Time Attack Remaining:</span>
+                <span className="flex items-center gap-1.5 font-bold">Time Attack Remaining:</span>
                 <span className="font-black text-[#6FA8DC] text-lg">{timeRemaining}s</span>
               </div>
             )}
@@ -681,7 +647,7 @@ export default function App() {
                   <div key={ach.id} className="p-3 bg-white/70 border border-orange-50 rounded-xl hover:translate-x-1 duration-150 transition-transform">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">??</span>
+                        <span className="text-lg">Badge</span>
                         <div>
                           <p className="text-xs font-serif font-black text-slate-800">{ach.title}</p>
                           <p className="text-[10px] text-gray-500 leading-tight">{ach.description}</p>
@@ -694,7 +660,7 @@ export default function App() {
                         </div>
                       ) : (
                         <div className="text-[9px] font-mono font-extrabold text-[#7A5A3A] flex items-center gap-0.5">
-                          ?? {ach.rewardCoins}??
+                          Gift {ach.rewardCoins} Gold
                         </div>
                       )}
                     </div>
@@ -721,13 +687,13 @@ export default function App() {
           {/* Static bottom indicators */}
           <div className="flex gap-2 justify-between border-t border-orange-100/50 pt-3 text-[10px] font-mono text-amber-800">
             <span>Level solves: {userStats.totalWordsSolved}</span>
-            <span>Streak days: {userStats.dailyStreak} ??</span>
+            <span>Streak days: {userStats.dailyStreak}</span>
           </div>
 
         </section>
 
         {/* INTERACTIVE PUZZLE STAGE AREA (Grid Board and Spin Wheel side-by-side) */}
-        <section className="min-h-0 lg:col-span-8 flex flex-col md:grid md:grid-cols-2 gap-1.5 sm:gap-6 items-stretch md:items-center">
+        <section className="min-h-0 lg:col-span-8 flex flex-col md:grid md:grid-cols-2 gap-1.5 max-[700px]:gap-1 sm:gap-6 items-stretch md:items-center">
           
           {/* LEFT: Crossword Grid Panel */}
           <div className="min-h-0 flex flex-col gap-1.5 sm:gap-4">
@@ -747,7 +713,7 @@ export default function App() {
             />
 
             {nextUnsolvedClue && (
-              <div className="md:hidden shrink-0 px-2.5 py-1 bg-white/85 border border-[#F4E7D3] rounded-xl text-[10px] font-serif text-[#7A5A3A] leading-tight shadow-sm" id="mobile_compact_clue_strip">
+              <div className="md:hidden shrink-0 px-2.5 py-1 max-[700px]:py-0.5 bg-white/85 border border-[#F4E7D3] rounded-xl text-[10px] max-[700px]:text-[9px] font-serif text-[#7A5A3A] leading-tight shadow-sm" id="mobile_compact_clue_strip">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono font-black text-[#C79A3B] uppercase tracking-wider text-[9px]">
                     Clue
@@ -782,7 +748,7 @@ export default function App() {
           </div>
 
           {/* RIGHT: Circular Spin Bead select Wheel and Hint utilities */}
-          <div className="min-h-0 flex flex-col items-center justify-center gap-1.5 sm:gap-6 bg-white/40 backdrop-blur-md rounded-2xl sm:rounded-3xl p-1.5 sm:p-5 border border-orange-100/40 shadow-lg">
+            <div className="min-h-0 flex flex-col items-center justify-center gap-1.5 max-[700px]:gap-1 sm:gap-6 bg-white/40 backdrop-blur-md rounded-2xl sm:rounded-3xl p-1.5 max-[700px]:p-1 sm:p-5 border border-orange-100/40 shadow-lg">
             
             <LetterWheel
               letters={level.letters}
@@ -800,7 +766,7 @@ export default function App() {
                 className="min-w-0 py-1.5 sm:py-2 px-1 sm:px-3 rounded-xl sm:rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[9px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer overflow-hidden whitespace-nowrap"
                 id="hint_reveal_letter_btn"
               >
-                <span>??</span> <span className="hidden sm:inline">Letter Spark </span>(50??)
+                <span>Hint</span> <span className="hidden sm:inline">Letter Spark </span>(50 Gold)
               </button>
 
               {/* Resolve entire slot word */}
@@ -809,7 +775,7 @@ export default function App() {
                 className="min-w-0 py-1.5 sm:py-2 px-1 sm:px-3 rounded-xl sm:rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[9px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer overflow-hidden whitespace-nowrap"
                 id="hint_reveal_word_btn"
               >
-                <span>??</span> <span className="hidden sm:inline">Complete Word </span>(120??)
+                <span>Word</span> <span className="hidden sm:inline">Complete Word </span>(120 Gold)
               </button>
             </div>
           </div>
@@ -822,7 +788,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl">??</span>
+              <span className="text-xl">Brand</span>
               <span className="font-serif font-black tracking-tight text-white">LefokoConnect • Traditional Setswana Connect Game</span>
             </div>
             <p className="text-[11px] font-mono text-gray-400 mt-1.5 leading-relaxed">
@@ -854,7 +820,7 @@ export default function App() {
 
         {/* Dynamic legal & branding metadata statement */}
         <div className="text-center py-3 bg-black/60 text-[9px] font-mono text-gray-500 border-t border-slate-900">
-          LefokoConnect 2026 • Crafted in cooperation with Gemini Pro AI Core • Pula! ????
+          LefokoConnect 2026 • Crafted in cooperation with Gemini Pro AI Core • Pula!
         </div>
       </footer>
 
@@ -876,7 +842,7 @@ export default function App() {
                 className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center font-bold"
                 aria-label="Close menu"
               >
-                ?
+                x
               </button>
             </div>
 
@@ -978,7 +944,7 @@ export default function App() {
                         <p className="text-xs font-serif font-black text-slate-800">{ach.title}</p>
                         <p className="text-[10px] text-slate-500">{ach.unlocked ? "Claimed" : `${ach.currentValue}/${ach.requiredValue}`}</p>
                       </div>
-                      <span className="text-[10px] font-mono font-black text-[#7A5A3A]">{ach.rewardCoins}??</span>
+                      <span className="text-[10px] font-mono font-black text-[#7A5A3A]">{ach.rewardCoins} Gold</span>
                     </div>
                     <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
                       <div className="h-full rounded-full bg-[#C79A3B]" style={{ width: `${perc}%` }} />
@@ -1009,7 +975,7 @@ export default function App() {
               className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-orange-100 text-gray-500 border hover:border-amber-200 flex items-center justify-center text-sm font-bold transition-all z-10"
               aria-label="Close admin console"
             >
-              ?
+              x
             </button>
             <div className="p-4" id="admin_console_inner_panel">
               <AdminPanel
@@ -1033,7 +999,7 @@ export default function App() {
             <div className="absolute -right-12 -bottom-12 w-32 h-32 bg-[#6FA8DC]/10 rounded-full blur-2xl animate-pulse" />
 
             <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center border-2 border-[#C79A3B] mb-4 text-4xl animate-bounce">
-              ??
+              Done
             </div>
 
             <span className="text-[10px] uppercase tracking-widest bg-emerald-100 px-2 py-0.5 rounded font-mono font-bold text-emerald-800">
@@ -1050,19 +1016,19 @@ export default function App() {
             {/* Reward ledger values grid */}
             <div className="grid grid-cols-2 gap-3 w-full my-6 font-mono text-sm">
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200/50 flex flex-col items-center">
-                <span className="text-xl">??</span>
-                <span className="font-black text-amber-800 mt-1">+100 Gold Coins</span>
+                <span className="text-xl">Gold</span>
+                <span className="font-black text-amber-800 mt-1">{lastCompletionWasPractice ? "Practice replay" : "+100 Gold Coins"}</span>
               </div>
               <div className="p-3 bg-sky-50 rounded-2xl border border-sky-100 flex flex-col items-center">
-                <span className="text-xl">??</span>
-                <span className="font-black text-sky-800 mt-1">+10 Water Gems</span>
+                <span className="text-xl">Gems</span>
+                <span className="font-black text-sky-800 mt-1">{lastCompletionWasPractice ? "No duplicate reward" : "+10 Water Gems"}</span>
               </div>
             </div>
 
             {/* Smart Oracle detail snippet regarding word of focus */}
             {level.gridWords[0] && (
               <div className="p-4 bg-slate-100 rounded-2xl w-full border text-left text-xs mb-6">
-                <p className="font-mono font-bold text-[#7A5A3A] mb-1">?? Word focus context:</p>
+                <p className="font-mono font-bold text-[#7A5A3A] mb-1">Word focus context:</p>
                 <div className="pl-2 border-l-2 border-[#6FA8DC]">
                   <p className="font-black uppercase text-slate-800 text-sm">
                     {level.gridWords[0].word}
@@ -1093,6 +1059,8 @@ export default function App() {
                   ? allLevels.find((l) => l.levelNumber === nextClassicProgress) || selectedLevel
                   : getActiveLevel();
 
+                acceptedMainWordsRef.current = new Set();
+                setLastCompletionWasPractice(false);
                 setSession({
                   currentLevel: nextLevel,
                   foundWords: [],
@@ -1105,12 +1073,18 @@ export default function App() {
                 if (activeMode === "timed") {
                   setTimeRemaining(45);
                   setIsTimerActive(true);
+                  triggerToast("Time Attack reset for another clean run.");
+                  return;
+                }
+                if (activeMode === "daily") {
+                  triggerToast("Daily challenge ready for practice replay.");
+                  return;
                 }
                 triggerToast("Embarking on the next Setswana path of learning...");
               }}
               className="w-full py-3.5 bg-gradient-to-r from-[#C79A3B] to-[#7A5A3A] rounded-2xl text-white font-mono font-bold text-xs uppercase border border-yellow-600 hover:opacity-90 active:scale-95 transition-transform"
             >
-              Continue to Level {activeMode === "classic" ? (userStats.classicLevelProgress < allLevels.length ? userStats.classicLevelProgress + 1 : 1) : level.levelNumber} ?
+              Continue to Level {activeMode === "classic" ? (userStats.classicLevelProgress < allLevels.length ? userStats.classicLevelProgress + 1 : 1) : level.levelNumber}
             </button>
           </div>
         </div>
@@ -1123,7 +1097,7 @@ export default function App() {
             <div className="absolute -right-12 -bottom-12 w-24 h-24 bg-red-500/10 rounded-full blur-2xl animate-pulse" />
 
             <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center border-2 border-red-300 mb-4 text-4xl">
-              ?
+              Time
             </div>
 
             <span className="text-[10px] uppercase tracking-widest bg-red-100 px-2 py-0.5 rounded font-mono font-bold text-red-700">
@@ -1139,6 +1113,8 @@ export default function App() {
 
             <button
               onClick={() => {
+                acceptedMainWordsRef.current = new Set();
+                setLastCompletionWasPractice(false);
                 setSession((prev) => ({
                   ...prev,
                   currentLevel: getActiveLevel(),
@@ -1151,7 +1127,7 @@ export default function App() {
                 setRevealedCells({});
                 setTimeRemaining(45);
                 setIsTimerActive(true);
-                triggerToast("Time Attack retry started. Focus on the next run! ?");
+                triggerToast("Time Attack retry started. Focus on the next run.");
               }}
               className="w-full py-3.5 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl text-white font-mono font-bold text-xs uppercase border border-red-700 hover:opacity-90 active:scale-95 transition-transform"
             >
@@ -1160,13 +1136,25 @@ export default function App() {
 
             <button
               onClick={() => {
-                setSession((prev) => ({ ...prev, status: "playing" }));
+                const fallbackMode = resolveFailedTimeAttackReturnMode();
+                setActiveMode(fallbackMode);
+                acceptedMainWordsRef.current = new Set();
+                setSession({
+                  currentLevel: allLevels.find((l) => l.levelNumber === userStats.classicLevelProgress) || staticLevels[0],
+                  foundWords: [],
+                  bonusWordsFound: [],
+                  swipedLetters: [],
+                  score: 0,
+                  status: "playing",
+                });
+                setRevealedCells({});
                 setIsTimerActive(false);
-                triggerToast("Switched out of Time Attack mode. Choose another challenge.");
+                setTimeRemaining(45);
+                triggerToast("Returned to Classic mode after Time Attack.");
               }}
               className="w-full mt-3 py-3 rounded-2xl text-red-700 font-mono font-bold text-xs uppercase border border-red-300 hover:bg-red-50 transition-colors"
             >
-              Return to mode selection
+              Return to Classic
             </button>
           </div>
         </div>
