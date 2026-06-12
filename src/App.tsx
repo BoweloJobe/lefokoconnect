@@ -43,6 +43,7 @@ export default function App() {
   const [activeMode, setActiveMode] = useState<"classic" | "daily" | "timed">("classic");
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isDictOpen, setIsDictOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [dictHighlight, setDictHighlight] = useState<string | undefined>(undefined);
 
   // Sound Config
@@ -471,12 +472,32 @@ export default function App() {
     }));
   };
 
+  const resetCurrentLevel = () => {
+    setSession({
+      currentLevel: getActiveLevel(),
+      foundWords: [],
+      bonusWordsFound: [],
+      swipedLetters: [],
+      score: 0,
+      status: "playing",
+    });
+    setRevealedCells({});
+    if (activeMode === "timed") {
+      setTimeRemaining(45);
+      setIsTimerActive(true);
+    }
+    triggerToast("Level reset. Fresh letters, fresh focus.");
+  };
+
   // Background visual settings mapping
   const activeBgConfig = themeBackgrounds[level.themeName as keyof typeof themeBackgrounds] || themeBackgrounds["Kalahari Grazing Lands"];
+  const nextUnsolvedClue = level.gridWords.find((gw) => !session.foundWords.includes(gw.word.toUpperCase())) || level.gridWords[0];
+  const solvedCount = session.foundWords.length;
+  const unlockedAchievements = userStats.achievements.filter((ach) => ach.unlocked).length;
 
   return (
     <div
-      className="min-h-screen text-slate-800 font-sans flex flex-col justify-between overflow-x-hidden relative"
+      className="h-[100dvh] md:min-h-screen md:h-auto text-slate-800 font-sans flex flex-col justify-between overflow-hidden md:overflow-x-hidden md:overflow-y-visible relative"
       style={{
         background: activeBgConfig.gradient,
         transition: "background 0.8s ease-in-out",
@@ -512,17 +533,17 @@ export default function App() {
       )}
 
       {/* HEADER SECTION PANEL */}
-      <header className="px-4 py-3 bg-white/40 backdrop-blur-md border-b border-orange-100 relative z-30 shadow-sm" id="game_header_shelf">
+      <header className="shrink-0 px-2.5 sm:px-4 py-1.5 sm:py-3 bg-white/40 backdrop-blur-md border-b border-orange-100 relative z-30 shadow-sm" id="game_header_shelf">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           
           {/* Trademark branding title */}
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-[#C79A3B] flex items-center justify-center text-white font-serif font-black shadow-md border border-yellow-200 outline outline-3 outline-offset-1 outline-orange-100">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#C79A3B] flex items-center justify-center text-white font-serif font-black shadow-md border border-yellow-200 outline outline-2 sm:outline-3 outline-offset-1 outline-orange-100">
               L
             </div>
             <div>
-              <h1 className="text-lg lg:text-xl font-serif font-black text-slate-900 tracking-tight">LefokoConnect</h1>
-              <p className="text-[10px] text-amber-800 font-mono font-bold tracking-widest uppercase">Words of Botswana</p>
+              <h1 className="text-sm sm:text-lg lg:text-xl font-serif font-black text-slate-900 tracking-tight">LefokoConnect</h1>
+              <p className="hidden sm:block text-[10px] text-amber-800 font-mono font-bold tracking-widest uppercase">Words of Botswana</p>
             </div>
           </div>
 
@@ -551,13 +572,13 @@ export default function App() {
           {/* User Wealth status ledger stats */}
           <div className="flex items-center gap-2 sm:gap-4 font-mono select-none">
             {/* Coins indicator */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 rounded-xl border border-amber-200/50 text-amber-800 font-black shadow-sm" title="Gold Coins Ledger">
-              <span className="text-base">🪙</span>
+            <div className="flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 bg-amber-50 rounded-xl border border-amber-200/50 text-amber-800 font-black shadow-sm" title="Gold Coins Ledger">
+              <span className="text-sm sm:text-base">🪙</span>
               <span className="text-xs sm:text-sm">{userStats.coins}</span>
             </div>
 
             {/* Gems indicator */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-sky-50 rounded-xl border border-sky-100 text-sky-800 font-black shadow-sm" title="Water Gems">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-sky-50 rounded-xl border border-sky-100 text-sky-800 font-black shadow-sm" title="Water Gems">
               <span className="text-base">💎</span>
               <span className="text-xs sm:text-sm">{userStats.gems}</span>
             </div>
@@ -571,43 +592,44 @@ export default function App() {
             {/* Sound Synthesizer toggle */}
             <button
               onClick={handleToggleMute}
-              className="p-1.5 rounded-xl border border-orange-100 bg-white hover:bg-slate-100 transition-colors shadow-sm"
+              className="hidden md:flex p-1.5 rounded-xl border border-orange-100 bg-white hover:bg-slate-100 transition-colors shadow-sm"
               aria-label={isMuted ? "Unmute Sound" : "Mute Sound"}
               id="sound_toggle_top_btn"
             >
               {isMuted ? <VolumeX className="text-gray-400" size={16} /> : <Volume2 className="text-[#C79A3B]" size={16} />}
             </button>
+
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-1.5 rounded-xl border border-orange-100 bg-white text-[#7A5A3A] shadow-sm active:scale-95 transition-transform"
+              aria-label="Open gameplay menu"
+              id="mobile_menu_open_btn"
+            >
+              <Settings size={17} />
+            </button>
           </div>
         </div>
       </header>
 
-      {/* MOBILE GAME MODE SWITCHER DOCK BAR */}
-      <div className="md:hidden w-full flex bg-white/75 backdrop-blur-md justify-around py-1.5 px-4 border-b border-orange-100 relative z-20 shadow-inner" id="mobile_gamemode_dock">
-        {[
-          { id: "classic", icon: Trophy, label: "Classic" },
-          { id: "daily", icon: Calendar, label: "Daily" },
-          { id: "timed", icon: Clock, label: "Timed" },
-        ].map((m) => (
-          <button
-            key={m.id}
-            onClick={() => setActiveMode(m.id as any)}
-            className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${
-              activeMode === m.id
-                ? "bg-amber-500/10 text-[#C79A3B]"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            <m.icon size={16} />
-            <span className="text-[10px] font-mono font-bold tracking-tight uppercase">{m.label}</span>
-          </button>
-        ))}
+      {/* MOBILE COMPACT LEVEL STATUS STRIP */}
+      <div className="md:hidden shrink-0 w-full bg-white/75 backdrop-blur-md px-2.5 py-1 border-b border-orange-100 relative z-20 shadow-inner" id="mobile_gameplay_status_strip">
+        <div className="flex items-center justify-between gap-3 text-[10px] font-mono font-bold uppercase tracking-wider text-[#7A5A3A]">
+          <span className="truncate">Level {level.levelNumber}: {level.title}</span>
+          <span className="shrink-0">{solvedCount}/{level.mainWords.length}</span>
+        </div>
+        {activeMode === "timed" && (
+          <div className="mt-0.5 flex items-center justify-between rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-mono font-black text-white">
+            <span>Time Attack</span>
+            <span className="text-[#6FA8DC]">{timeRemaining}s</span>
+          </div>
+        )}
       </div>
 
       {/* MAIN GAMEPLAY CONTENT CONTAINER */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6 sm:py-8 grid lg:grid-cols-12 gap-6 relative z-10 items-stretch" id="core_app_main_segment">
+      <main className="flex-1 min-h-0 max-w-7xl mx-auto w-full px-2 sm:px-4 py-1.5 sm:py-8 grid lg:grid-cols-12 gap-2 sm:gap-6 relative z-10 items-stretch overflow-hidden md:overflow-visible" id="core_app_main_segment">
         
         {/* SIDE BAR LAYOUT SHEET (Progress track, Achievements Shelf) */}
-        <section className="lg:col-span-4 flex flex-col justify-between gap-5 bg-white/30 backdrop-blur-lg border border-orange-100/40 p-5 rounded-3xl shadow-lg">
+        <section className="hidden lg:col-span-4 md:flex flex-col justify-between gap-5 bg-white/30 backdrop-blur-lg border border-orange-100/40 p-5 rounded-3xl shadow-lg">
           
           {/* Level Header info card with descriptions */}
           <div className="p-4 bg-gradient-to-br from-amber-50/70 to-orange-100/60 rounded-2xl border border-amber-200/50">
@@ -695,10 +717,10 @@ export default function App() {
         </section>
 
         {/* INTERACTIVE PUZZLE STAGE AREA (Grid Board and Spin Wheel side-by-side) */}
-        <section className="lg:col-span-8 grid md:grid-cols-2 gap-6 items-center">
+        <section className="min-h-0 lg:col-span-8 flex flex-col md:grid md:grid-cols-2 gap-1.5 sm:gap-6 items-stretch md:items-center">
           
           {/* LEFT: Crossword Grid Panel */}
-          <div className="flex flex-col gap-4">
+          <div className="min-h-0 flex flex-col gap-1.5 sm:gap-4">
             <CrosswordBoard
               gridSize={level.gridSize}
               gridWords={level.gridWords}
@@ -714,8 +736,24 @@ export default function App() {
               }}
             />
 
+            {nextUnsolvedClue && (
+              <div className="md:hidden shrink-0 px-2.5 py-1 bg-white/85 border border-[#F4E7D3] rounded-xl text-[10px] font-serif text-[#7A5A3A] leading-tight shadow-sm" id="mobile_compact_clue_strip">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-black text-[#C79A3B] uppercase tracking-wider text-[9px]">
+                    Clue
+                  </span>
+                  <span className="font-mono font-bold text-[9px] text-slate-500">
+                    {nextUnsolvedClue.word.length} letters
+                  </span>
+                </div>
+                <p className="mt-0.5 max-h-6 overflow-hidden italic">
+                  {nextUnsolvedClue.clue || "A traditional Setswana concept."}
+                </p>
+              </div>
+            )}
+
             {/* Quick Interactive Tooltip detailing clues of remaining lines */}
-            <div className="p-3 bg-white border border-[#F4E7D3] rounded-2xl text-[11px] font-serif text-[#7A5A3A] italic leading-normal shadow-sm">
+            <div className="hidden md:block p-3 bg-white border border-[#F4E7D3] rounded-2xl text-[11px] font-serif text-[#7A5A3A] italic leading-normal shadow-sm">
               <span className="font-mono font-bold block text-[#C79A3B] uppercase tracking-wider not-italic text-[9px] mb-1">
                 Active Crossword Clues:
               </span>
@@ -734,33 +772,34 @@ export default function App() {
           </div>
 
           {/* RIGHT: Circular Spin Bead select Wheel and Hint utilities */}
-          <div className="flex flex-col items-center justify-center gap-6 bg-white/40 backdrop-blur-md rounded-3xl p-5 border border-orange-100/40 shadow-lg">
+          <div className="min-h-0 flex flex-col items-center justify-center gap-1.5 sm:gap-6 bg-white/40 backdrop-blur-md rounded-2xl sm:rounded-3xl p-1.5 sm:p-5 border border-orange-100/40 shadow-lg">
             
             <LetterWheel
               letters={level.letters}
               onWordComplete={handleWordSwipeComplete}
               accentColor="#C79A3B"
               onShuffleRequest={handleShuffleLetters}
+              isInputEnabled={session.status === "playing"}
             />
 
             {/* Hint System interface row */}
-            <div className="w-full grid grid-cols-2 gap-2" id="hint_system_row">
+            <div className="w-full grid grid-cols-2 gap-1 sm:gap-2" id="hint_system_row">
               {/* Reveal single secret letter */}
               <button
                 onClick={triggerRevealLetterHint}
-                className="py-2 px-3 rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[10px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="min-w-0 py-1.5 sm:py-2 px-1 sm:px-3 rounded-xl sm:rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[9px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer overflow-hidden whitespace-nowrap"
                 id="hint_reveal_letter_btn"
               >
-                <span>💡</span> Letter Spark (50🪙)
+                <span>💡</span> <span className="hidden sm:inline">Letter Spark </span>(50🪙)
               </button>
 
               {/* Resolve entire slot word */}
               <button
                 onClick={triggerRevealWordHint}
-                className="py-2 px-3 rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[10px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="min-w-0 py-1.5 sm:py-2 px-1 sm:px-3 rounded-xl sm:rounded-2xl bg-[#FFFDF9] border border-orange-100 hover:border-amber-400 font-mono font-bold text-[9px] sm:text-xs text-gray-700 hover:text-amber-800 flex items-center justify-center gap-1 transition-all shadow-sm active:scale-95 cursor-pointer overflow-hidden whitespace-nowrap"
                 id="hint_reveal_word_btn"
               >
-                <span>🔍</span> Complete Word (120🪙)
+                <span>🔍</span> <span className="hidden sm:inline">Complete Word </span>(120🪙)
               </button>
             </div>
           </div>
@@ -769,7 +808,7 @@ export default function App() {
       </main>
 
       {/* FOOTER SECTION ROW WITH INTERFACE TRIGGERS */}
-      <footer className="bg-slate-900 text-white border-t border-slate-800 mt-8 relative z-30" id="game_footer_bar">
+      <footer className="hidden md:block bg-slate-900 text-white border-t border-slate-800 mt-8 relative z-30" id="game_footer_bar">
         <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2">
@@ -808,6 +847,139 @@ export default function App() {
           LefokoConnect 2026 • Crafted in cooperation with Gemini Pro AI Core • Pula! 🇧🇼
         </div>
       </footer>
+
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden bg-slate-900/55 backdrop-blur-sm flex items-end" id="mobile_secondary_menu_overlay" role="dialog" aria-modal="true" aria-labelledby="mobile_menu_title">
+          <div className="absolute inset-0" onClick={() => setIsMobileMenuOpen(false)} />
+          <div className="relative w-full max-h-[86vh] overflow-y-auto rounded-t-3xl bg-[#FFFDF9] border-t border-amber-200 shadow-2xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 id="mobile_menu_title" className="font-serif font-black text-lg text-slate-900">
+                  Game Menu
+                </h2>
+                <p className="text-[10px] font-mono uppercase tracking-widest text-[#7A5A3A]">
+                  Level {level.levelNumber} • {activeMode}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center font-bold"
+                aria-label="Close menu"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-4" id="mobile_menu_mode_switcher">
+              {[
+                { id: "classic", icon: Trophy, label: "Classic" },
+                { id: "daily", icon: Calendar, label: "Daily" },
+                { id: "timed", icon: Clock, label: "Timed" },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setActiveMode(m.id as any);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex flex-col items-center gap-1 px-2 py-2 rounded-2xl transition-all border text-[10px] font-mono font-bold uppercase ${
+                    activeMode === m.id
+                      ? "bg-[#C79A3B] text-white border-yellow-500"
+                      : "bg-white text-slate-600 border-orange-100"
+                  }`}
+                >
+                  <m.icon size={16} />
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4" id="mobile_menu_primary_actions">
+              <button
+                onClick={() => {
+                  setIsDictOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="py-3 px-3 rounded-2xl bg-white border border-orange-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center gap-2"
+              >
+                <BookOpen size={15} className="text-[#C79A3B]" /> Dictionary
+              </button>
+
+              <button
+                onClick={handleToggleMute}
+                className="py-3 px-3 rounded-2xl bg-white border border-orange-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center gap-2"
+              >
+                {isMuted ? <VolumeX size={15} className="text-slate-500" /> : <Volume2 size={15} className="text-[#C79A3B]" />}
+                {isMuted ? "Unmute" : "Sound"}
+              </button>
+
+              <button
+                onClick={() => {
+                  resetCurrentLevel();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="py-3 px-3 rounded-2xl bg-white border border-orange-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={15} className="text-[#7A5A3A]" /> Reset
+              </button>
+
+              {isAdminAvailable && (
+                <button
+                  onClick={() => {
+                    setIsAdminOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="py-3 px-3 rounded-2xl bg-white border border-sky-100 text-slate-700 font-mono font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <Shield size={15} className="text-[#6FA8DC]" /> Admin
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4 text-center font-mono text-xs" id="mobile_stats_summary">
+              <div className="rounded-2xl bg-amber-50 border border-amber-100 p-3">
+                <p className="text-[9px] uppercase tracking-widest text-amber-800 font-bold">Solves</p>
+                <p className="text-lg font-black text-slate-900">{userStats.totalWordsSolved}</p>
+              </div>
+              <div className="rounded-2xl bg-sky-50 border border-sky-100 p-3">
+                <p className="text-[9px] uppercase tracking-widest text-sky-800 font-bold">Streak</p>
+                <p className="text-lg font-black text-slate-900">{userStats.dailyStreak}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3">
+                <p className="text-[9px] uppercase tracking-widest text-emerald-800 font-bold">XP</p>
+                <p className="text-lg font-black text-slate-900">{userStats.xp}</p>
+              </div>
+              <div className="rounded-2xl bg-orange-50 border border-orange-100 p-3">
+                <p className="text-[9px] uppercase tracking-widest text-[#7A5A3A] font-bold">Badges</p>
+                <p className="text-lg font-black text-slate-900">{unlockedAchievements}/{userStats.achievements.length}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2" id="mobile_achievements_summary">
+              <h3 className="text-[10px] font-mono font-black uppercase tracking-widest text-[#7A5A3A] flex items-center gap-1">
+                <Award size={13} /> Achievements
+              </h3>
+              {userStats.achievements.map((ach) => {
+                const perc = Math.min(100, (ach.currentValue / ach.requiredValue) * 100);
+                return (
+                  <div key={ach.id} className="rounded-2xl bg-white border border-orange-100 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-serif font-black text-slate-800">{ach.title}</p>
+                        <p className="text-[10px] text-slate-500">{ach.unlocked ? "Claimed" : `${ach.currentValue}/${ach.requiredValue}`}</p>
+                      </div>
+                      <span className="text-[10px] font-mono font-black text-[#7A5A3A]">{ach.rewardCoins}🪙</span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                      <div className="h-full rounded-full bg-[#C79A3B]" style={{ width: `${perc}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DRAWERS: 1. Educational Dictionary Modal */}
       <CulturalModal

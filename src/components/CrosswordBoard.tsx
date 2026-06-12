@@ -56,14 +56,14 @@ export default function CrosswordBoard({
 
   return (
     <div
-      className="flex flex-col items-center p-3 sm:p-5 bg-white/70 backdrop-blur-md rounded-2xl border border-orange-100 shadow-inner overflow-auto max-w-full"
+      className="flex flex-col items-center shrink-0 p-1 sm:p-5 bg-white/70 backdrop-blur-md rounded-xl sm:rounded-2xl border border-orange-100 shadow-inner overflow-hidden max-w-full"
       style={{ boxShadow: "inset 0 2px 8px rgba(122,90,58,0.06)" }}
       id="crossword_board_wrapper"
     >
       <div
-        className="grid gap-1 sm:gap-1.5 p-2 bg-slate-900/5 rounded-xl border border-gray-200/40"
+        className="grid w-[min(calc(100vw-1rem),33dvh,14rem)] sm:w-auto gap-0.5 sm:gap-1.5 p-1 sm:p-2 bg-slate-900/5 rounded-lg sm:rounded-xl border border-gray-200/40"
         style={{
-          gridTemplateColumns: `repeat(${gridSize}, minmax(1.8rem, 3.2rem))`,
+          gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
         }}
         id="crossword_grid_layout"
       >
@@ -113,16 +113,16 @@ export default function CrosswordBoard({
                   }
                 }}
                 disabled={!gridWords.some((gw) => cell.wordRefs.includes(gw.word) && gw.clue)}
-                className={`relative aspect-square w-full rounded-lg border-2 flex items-center justify-center transition-all duration-300 focus:outline-none hover:border-amber-400 hover:scale-105 active:scale-95 ${boxBg}`}
+                className={`relative aspect-square w-full rounded-md sm:rounded-lg border sm:border-2 flex items-center justify-center transition-all duration-300 focus:outline-none hover:border-amber-400 hover:scale-105 active:scale-95 ${boxBg}`}
               >
                 {/* Visual grid cell content */}
-                <span className={`text-base sm:text-xl md:text-2xl select-none font-sans uppercase tracking-tight ${textStyle}`}>
+                <span className={`text-[clamp(0.75rem,4.2vw,1rem)] sm:text-xl md:text-2xl select-none font-sans uppercase tracking-tight ${textStyle}`}>
                   {displayLetter}
                 </span>
 
                 {/* Level index anchor indicator inside peak boxes */}
                 {cell.isPeakOfWord && !isGuessed && !isIndividualHintRevealed && (
-                  <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] text-gray-400 font-mono font-bold">
+                  <div className="absolute top-0 left-0.5 sm:top-0.5 sm:left-1 text-[7px] sm:text-[9px] text-gray-400 font-mono font-bold">
                     ✎
                   </div>
                 )}
@@ -132,7 +132,7 @@ export default function CrosswordBoard({
         )}
       </div>
 
-      <p className="text-xs text-gray-400 font-mono mt-4 flex items-center gap-1">
+      <p className="hidden sm:flex text-xs text-gray-400 font-mono mt-4 items-center gap-1">
         <span>💡</span> Tap on cells to inspect clues for that word slot!
       </p>
     </div>

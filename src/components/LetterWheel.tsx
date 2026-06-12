@@ -7,6 +7,7 @@ interface LetterWheelProps {
   onWordComplete: (word: string) => void;
   accentColor?: string; // e.g. deep gold or Botswana blue
   onShuffleRequest?: () => void;
+  isInputEnabled?: boolean;
 }
 
 interface LetterNode {
@@ -21,15 +22,24 @@ export default function LetterWheel({
   onWordComplete,
   accentColor = "#C79A3B",
   onShuffleRequest,
+  isInputEnabled = true,
 }: LetterWheelProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingTapIndexRef = useRef<number>(-1);
+  const hasActiveSwipeRef = useRef(false);
+  const selectedIndicesRef = useRef<number[]>([]);
 
   const [nodes, setNodes] = useState<LetterNode[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [isSwiping, setIsSwiping] = useState(false);
   const [wheelKey, setWheelKey] = useState(0); // for shuffle animation resets
+
+  useEffect(() => {
+    selectedIndicesRef.current = selectedIndices;
+  }, [selectedIndices]);
 
   // Initialize circular coordinates for letter nodes
   useEffect(() => {
@@ -46,9 +56,23 @@ export default function LetterWheel({
     });
     setNodes(computed);
     setSelectedIndices([]);
+    selectedIndicesRef.current = [];
     setIsSwiping(false);
     setDragPosition(null);
   }, [letters, wheelKey]);
+
+  useEffect(() => {
+    if (!isInputEnabled) {
+      activePointerIdRef.current = null;
+      pointerStartRef.current = null;
+      pendingTapIndexRef.current = -1;
+      hasActiveSwipeRef.current = false;
+      setSelectedIndices([]);
+      selectedIndicesRef.current = [];
+      setIsSwiping(false);
+      setDragPosition(null);
+    }
+  }, [isInputEnabled]);
 
   // Handle shuffling letter node order locally (with visual feedback)
   const handleShuffle = () => {
@@ -60,7 +84,15 @@ export default function LetterWheel({
     }
   };
 
-  const getPointerPos = (e: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
+  const getPointerPos = (
+    e:
+      | React.MouseEvent
+      | React.TouchEvent
+      | React.PointerEvent
+      | TouchEvent
+      | MouseEvent
+      | PointerEvent,
+  ) => {
     if (!svgRef.current) return { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
     let clientX = 0;
@@ -93,112 +125,204 @@ export default function LetterWheel({
     return -1;
   };
 
-  // Start swiping on a bead or empty area
-  const startDrag = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
+  const addCollisionIndex = (collidedIdx: number) => {
+    setSelectedIndices((prev) => {
+      if (collidedIdx === -1) {
+        selectedIndicesRef.current = prev;
+        return prev;
+      }
+      if (prev.length === 0) {
+        soundEngine.playLetterConnect(0);
+        const next = [collidedIdx];
+        selectedIndicesRef.current = next;
+        return next;
+      }
+
+      if (!prev.includes(collidedIdx)) {
+        soundEngine.playLetterConnect(prev.length);
+        const next = [...prev, collidedIdx];
+        selectedIndicesRef.current = next;
+        return next;
+      }
+
+      if (prev.length > 1 && prev[prev.length - 2] === collidedIdx) {
+        soundEngine.playLetterConnect(Math.max(0, prev.length - 2));
+        const next = prev.slice(0, -1);
+        selectedIndicesRef.current = next;
+        return next;
+      }
+
+      selectedIndicesRef.current = prev;
+      return prev;
+    });
+  };
+
+  const beginSwipe = (startIndex: number, collidedIdx: number) => {
+    hasActiveSwipeRef.current = true;
+    setIsSwiping(true);
+
+    if (startIndex !== -1) {
+      soundEngine.playLetterConnect(0);
+      const initialSelection = [startIndex];
+      selectedIndicesRef.current = initialSelection;
+      setSelectedIndices(initialSelection);
+      if (collidedIdx !== -1 && collidedIdx !== startIndex) {
+        setSelectedIndices((prev) => {
+          soundEngine.playLetterConnect(prev.length);
+          const next = [...prev, collidedIdx];
+          selectedIndicesRef.current = next;
+          return next;
+        });
+      }
+    } else {
+      setSelectedIndices([]);
+      selectedIndicesRef.current = [];
+      addCollisionIndex(collidedIdx);
+    }
+  };
+
+  // Start tracking a pointer. Tap mode is resolved on release; swipe mode starts after movement.
+  const startDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isInputEnabled || activePointerIdRef.current !== null) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
     e.preventDefault();
     const pos = getPointerPos(e);
     if (!pos) return;
 
-    setIsSwiping(true);
+    activePointerIdRef.current = e.pointerId;
+    pointerStartRef.current = pos;
     setDragPosition(pos);
+    pendingTapIndexRef.current = checkCollision(pos.x, pos.y);
 
-    const collidedIdx = checkCollision(pos.x, pos.y);
-    if (collidedIdx !== -1) {
-      setSelectedIndices([collidedIdx]);
-      soundEngine.playLetterConnect(0);
+    if (svgRef.current.setPointerCapture) {
+      svgRef.current.setPointerCapture(e.pointerId);
     }
   };
 
   // Dragging update line and capture subsequent letter beads
-  const continueDrag = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-    if (!isSwiping) return;
+  const continueDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!isInputEnabled || activePointerIdRef.current !== e.pointerId) return;
     const pos = getPointerPos(e);
     if (!pos) return;
 
     setDragPosition(pos);
 
     const collidedIdx = checkCollision(pos.x, pos.y);
-    if (collidedIdx !== -1) {
-      // If was not already selected
-      if (!selectedIndices.includes(collidedIdx)) {
-        const lastIdx = selectedIndices[selectedIndices.length - 1];
-        // Allow selection of adjacent/any letters as long as not duplicated immediately
-        setSelectedIndices((prev) => {
-          soundEngine.playLetterConnect(prev.length);
-          return [...prev, collidedIdx];
-        });
-      } else {
-        // If it's the second-to-last item, support "rolling back" the swipe (highly tactile feature!)
-        if (selectedIndices.length > 1 && selectedIndices[selectedIndices.length - 2] === collidedIdx) {
-          setSelectedIndices((prev) => prev.slice(0, -1));
-          soundEngine.playLetterConnect(Math.max(0, selectedIndices.length - 2));
-        }
-      }
+    const start = pointerStartRef.current;
+    const movedFarEnough = start
+      ? Math.hypot(pos.x - start.x, pos.y - start.y) > 5
+      : false;
+    const movedToAnotherLetter = collidedIdx !== -1 && collidedIdx !== pendingTapIndexRef.current;
+
+    if (!hasActiveSwipeRef.current && (movedFarEnough || movedToAnotherLetter)) {
+      beginSwipe(pendingTapIndexRef.current, collidedIdx);
+      return;
     }
+
+    if (hasActiveSwipeRef.current) addCollisionIndex(collidedIdx);
   };
 
   const handleTapNode = (index: number) => {
-    if (isSwiping) return;
+    if (!isInputEnabled || hasActiveSwipeRef.current) return;
     setSelectedIndices((prev) => {
       if (prev.includes(index)) {
         if (prev.length > 1 && prev[prev.length - 2] === index) {
           soundEngine.playLetterConnect(Math.max(0, prev.length - 2));
-          return prev.slice(0, -1);
+          const next = prev.slice(0, -1);
+          selectedIndicesRef.current = next;
+          return next;
         }
+        selectedIndicesRef.current = prev;
         return prev;
       }
       soundEngine.playLetterConnect(prev.length);
-      return [...prev, index];
+      const next = [...prev, index];
+      selectedIndicesRef.current = next;
+      return next;
     });
   };
 
   const submitSelectedWord = () => {
-    if (selectedIndices.length === 0) return;
-    const swipedWord = selectedIndices.map((idx) => nodes[idx].letter).join("");
+    if (!isInputEnabled) return;
+    const indices = selectedIndicesRef.current;
+    if (indices.length === 0) return;
+    const swipedWord = indices.map((idx) => nodes[idx].letter).join("");
     onWordComplete(swipedWord);
     setSelectedIndices([]);
+    selectedIndicesRef.current = [];
     setDragPosition(null);
   };
 
   // Finalize word selection
-  const endDrag = () => {
-    if (!isSwiping) return;
+  const endDrag = (pointerId?: number) => {
+    if (pointerId !== undefined && activePointerIdRef.current !== pointerId) return;
+
+    if (hasActiveSwipeRef.current && isInputEnabled) {
+      const indices = selectedIndicesRef.current;
+      if (indices.length > 0) {
+        const swipedWord = indices.map((idx) => nodes[idx].letter).join("");
+        onWordComplete(swipedWord);
+      }
+      setSelectedIndices([]);
+      selectedIndicesRef.current = [];
+    } else if (pendingTapIndexRef.current !== -1) {
+      handleTapNode(pendingTapIndexRef.current);
+    }
+
+    activePointerIdRef.current = null;
+    pointerStartRef.current = null;
+    pendingTapIndexRef.current = -1;
+    hasActiveSwipeRef.current = false;
     setIsSwiping(false);
     setDragPosition(null);
+  };
 
-    if (selectedIndices.length > 0) {
-      const swipedWord = selectedIndices.map((idx) => nodes[idx].letter).join("");
-      onWordComplete(swipedWord);
+  const handlePointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    e.preventDefault();
+    if (svgRef.current?.hasPointerCapture?.(e.pointerId)) {
+      svgRef.current.releasePointerCapture(e.pointerId);
     }
+    endDrag(e.pointerId);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+    pointerStartRef.current = null;
+    pendingTapIndexRef.current = -1;
+    hasActiveSwipeRef.current = false;
+    setIsSwiping(false);
+    setDragPosition(null);
     setSelectedIndices([]);
+    selectedIndicesRef.current = [];
   };
 
   // Setup auxiliary releases to catch release outside SVGSVGElement bounds
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (isSwiping) {
-        endDrag();
+    const handleGlobalPointerUp = (event: PointerEvent) => {
+      if (activePointerIdRef.current === event.pointerId) {
+        endDrag(event.pointerId);
       }
     };
-    window.addEventListener("mouseup", handleGlobalMouseUp);
-    window.addEventListener("touchend", handleGlobalMouseUp);
+    window.addEventListener("pointerup", handleGlobalPointerUp);
     return () => {
-      window.removeEventListener("mouseup", handleGlobalMouseUp);
-      window.removeEventListener("touchend", handleGlobalMouseUp);
+      window.removeEventListener("pointerup", handleGlobalPointerUp);
     };
-  }, [isSwiping, selectedIndices, nodes]);
+  }, [nodes, isInputEnabled]);
 
   // Swiped preview word display
   const swipedWordPreview = selectedIndices.map((idx) => nodes[idx]?.letter || "").join("");
 
   return (
-    <div className="flex flex-col items-center select-none" id="letter_wheel_container">
+    <div className="flex flex-col items-center select-none shrink-0" id="letter_wheel_container">
       {/* Dynamic Overlay Preview */}
-<div className="h-12 flex flex-col items-center justify-center mb-6 gap-2">
+      <div className="h-7 sm:h-12 flex flex-col items-center justify-center mb-1 sm:mb-6 gap-1 sm:gap-2">
           {swipedWordPreview && (
             <>
               <div
-                className="px-6 py-2 rounded-full text-white font-mono font-bold text-2xl tracking-widest shadow-lg animate-bounce duration-150 border uppercase"
+                className="px-3 sm:px-6 py-1 sm:py-2 rounded-full text-white font-mono font-bold text-base sm:text-2xl tracking-widest shadow-lg animate-bounce duration-150 border uppercase"
                 style={{
                   background: `radial-gradient(circle, ${accentColor} 0%, #1E293B 100%)`,
                   borderColor: accentColor,
@@ -210,7 +334,7 @@ export default function LetterWheel({
               <button
                 type="button"
                 onClick={submitSelectedWord}
-                className="px-4 py-1 rounded-full bg-white/90 border border-slate-300 text-slate-700 text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition"
+                className="px-2.5 sm:px-4 py-0.5 sm:py-1 rounded-full bg-white/90 border border-slate-300 text-slate-700 text-[9px] sm:text-xs font-bold uppercase tracking-wider hover:bg-slate-100 transition"
               >
                 Submit
               </button>
@@ -218,7 +342,7 @@ export default function LetterWheel({
         )}
       </div>
 
-      <div className="relative w-72 h-72 flex items-center justify-center">
+      <div className="relative w-[min(54vw,13.25rem)] h-[min(54vw,13.25rem)] sm:w-72 sm:h-72 flex items-center justify-center">
         {/* Modern tribal outer pattern backing */}
         <div className="absolute inset-0 rounded-full border border-dashed border-gray-300 opacity-20 animate-spin" style={{ animationDuration: "120s" }} />
         <div className="absolute inset-4 rounded-full border border-double border-orange-200 opacity-30" />
@@ -228,10 +352,10 @@ export default function LetterWheel({
           ref={svgRef}
           className="relative z-10 w-full h-full overflow-visible touch-none"
           viewBox="0 0 280 280"
-          onMouseDown={startDrag}
-          onMouseMove={continueDrag}
-          onTouchStart={startDrag}
-          onTouchMove={continueDrag}
+          onPointerDown={startDrag}
+          onPointerMove={continueDrag}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         >
           {/* Glowing Connect Trail Lines */}
           {selectedIndices.length > 0 &&
@@ -292,14 +416,6 @@ export default function LetterWheel({
                   className="transition-colors duration-200 ease-out shadow-md"
                   style={{
                     boxShadow: isSelected ? `0 0 15px ${accentColor}` : "none",
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleTapNode(index);
-                  }}
-                  onTouchEnd={(e) => {
-                    e.stopPropagation();
-                    handleTapNode(index);
                   }}
                 />
 
